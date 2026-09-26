@@ -1,0 +1,59 @@
+{
+	"version": 1,
+	"skills": {
+		"next-cache-components-adoption": {
+			"source": "vercel/next.js",
+			"sourceType": "github",
+			"skillPath": "skills/next-cache-components-adoption/SKILL.md",
+			"computedHash": "950f823ac292046d2479034fee6899f6b2f3fe95f5bd5fcfcf3cfe9a9dc571a0"
+		},
+		"next-cache-components-optimizer": {
+			"source": "vercel/next.js",
+			"sourceType": "github",
+			"skillPath": "skills/next-cache-components-optimizer/SKILL.md",
+			"computedHash": "c62f6c13119c4e9027268edaa07291c33d74a676e1bd93583349c07efd990f6b"
+		},
+		"next-dev-loop": {
+			"source": "vercel/next.js",
+			"sourceType": "github",
+			"skillPath": "skills/next-dev-loop/SKILL.md",
+			"computedHash": "c79ce9844e5e78086c64d820c5b34496ca411c097db68d0a264caf84abcc2c1c"
+		},
+		"next-partial-prefetching-adoption": {
+			"source": "vercel/next.js",
+			"sourceType": "github",
+			"skillPath": "skills/next-partial-prefetching-adoption/SKILL.md",
+			"computedHash": "a38d97149035862560496ec063dc2559444c5140b05acc3059c70ed990c67c76"
+		},
+		"shadcn": {
+			"source": "shadcn/ui",
+			"sourceType": "github",
+			"skillPath": "skills/shadcn/SKILL.md",
+			"computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
+		},
+		"turborepo": {
+			"source": "vercel/turborepo",
+			"sourceType": "github",
+			"skillPath": "skills/turborepo/SKILL.md",
+			"computedHash": "9ced49eba872730912bdccf6bf5bb621f6e1572ad3fef8c58cc2a1ae333775d9"
+		},
+		"vercel-composition-patterns": {
+			"source": "vercel-labs/agent-skills",
+			"sourceType": "github",
+			"skillPath": "skills/composition-patterns/SKILL.md",
+			"computedHash": "f98931159fa9c7fed043bcd18a891a46dcf89ababa38df13a4c5b7b30dc0ce07"
+		},
+		"vercel-react-best-practices": {
+			"source": "vercel-labs/agent-skills",
+			"sourceType": "github",
+			"skillPath": "skills/react-best-practices/SKILL.md",
+			"computedHash": "3219a1944e404ffc14d1d9d6aef6dd2e3855b81387ee0a044ccbfe14d34c2357"
+		},
+		"web-design-guidelines": {
+			"source": "vercel-labs/agent-skills",
+			"sourceType": "github",
+			"skillPath": "skills/web-design-guidelines/SKILL.md",
+			"computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+		}
+	}
+}

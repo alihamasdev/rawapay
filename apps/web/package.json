@@ -1,0 +1,37 @@
+{
+	"name": "web",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"dev": "next dev",
+		"build": "next build",
+		"check-types": "tsc --noEmit",
+		"start": "next start",
+		"env:generate": "varlock codegen"
+	},
+	"dependencies": {
+		"@base-ui/react": "^1.8.0",
+		"@swc/helpers": "^0.5.23",
+		"@varlock/nextjs-integration": "1.2.2",
+		"babel-plugin-react-compiler": "^1.0.0",
+		"class-variance-authority": "^0.7.1",
+		"cn": "^0.4.0",
+		"lucide-react": "catalog:",
+		"next": "^16.3.6",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"shadcn": "^4.21.0",
+		"tw-animate-css": "^1.4.0",
+		"varlock": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@rawapay/config": "workspace:*",
+		"@tailwindcss/postcss": "catalog:",
+		"@types/node": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"tailwindcss": "catalog:",
+		"typescript": "catalog:"
+	}
+}
