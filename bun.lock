@@ -9,6 +9,7 @@
       },
       "devDependencies": {
         "@rawapay/config": "workspace:*",
+        "@types/bun": "^1.4.2",
         "@types/node": "catalog:",
         "oxfmt": "^0.66.0",
         "oxlint": "^1.81.0",
@@ -54,6 +55,7 @@
         "cn": "^0.4.0",
         "lucide-react": "catalog:",
         "next": "^16.3.6",
+        "rawapay": "workspace:*",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shadcn": "^4.21.0",
@@ -74,6 +76,59 @@
     "packages/config": {
       "name": "@rawapay/config",
       "version": "0.0.0",
+    },
+    "packages/core": {
+      "name": "@rawapay/core",
+      "version": "0.1.0",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@rawapay/config": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/easypaisa": {
+      "name": "@rawapay/easypaisa",
+      "version": "0.1.0",
+      "dependencies": {
+        "@rawapay/core": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@rawapay/config": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/jazzcash": {
+      "name": "@rawapay/jazzcash",
+      "version": "0.1.0",
+      "dependencies": {
+        "@rawapay/core": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@rawapay/config": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/rawapay": {
+      "name": "rawapay",
+      "version": "0.1.0",
+      "dependencies": {
+        "@rawapay/core": "workspace:*",
+        "@rawapay/easypaisa": "workspace:*",
+        "@rawapay/jazzcash": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@rawapay/config": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
     },
   },
   "overrides": {
@@ -401,6 +456,12 @@
 
     "@rawapay/config": ["@rawapay/config@workspace:packages/config"],
 
+    "@rawapay/core": ["@rawapay/core@workspace:packages/core"],
+
+    "@rawapay/easypaisa": ["@rawapay/easypaisa@workspace:packages/easypaisa"],
+
+    "@rawapay/jazzcash": ["@rawapay/jazzcash@workspace:packages/jazzcash"],
+
     "@sec-ant/readable-stream": ["@sec-ant/readable-stream@0.4.1", "", {}, "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg=="],
 
     "@shikijs/core": ["@shikijs/core@4.4.3", "", { "dependencies": { "@shikijs/primitive": "4.4.3", "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5", "hast-util-to-html": "^9.0.5" } }, "sha512-QCR4q2ZO/ILJEuwiBMel4wdcTDb1JGwfjKTxPDF6x8ixOaluPrVqIn06C99AcRPhmYlBR56d/Fb+GN58GzExpg=="],
@@ -468,6 +529,8 @@
     "@turbo/windows-64": ["@turbo/windows-64@2.11.4", "", { "os": "win32", "cpu": "x64" }, "sha512-COr+++1GwDg09XbJdm3sP1gEQApeV43UknYP9h82qet1tAGJrGQAxKVTMrf2JMsMw8MkJRnQj3gAVuQmV1kIyQ=="],
 
     "@turbo/windows-arm64": ["@turbo/windows-arm64@2.11.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-gh5lwDA2d4aBdLvTANhFsFEgxbBqKZ4m4dCyChw9GoX8b+Esk8H3p25Q+rlWCUVJ2o6Hne10ZTL0QSFfWD4gIA=="],
+
+    "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
     "@types/debug": ["@types/debug@4.1.13", "", { "dependencies": { "@types/ms": "*" } }, "sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw=="],
 
@@ -608,6 +671,8 @@
     "braces": ["braces@3.0.3", "", { "dependencies": { "fill-range": "^7.1.1" } }, "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="],
 
     "browserslist": ["browserslist@4.29.1", "", { "dependencies": { "baseline-browser-mapping": "^2.11.25", "caniuse-lite": "^1.0.30001810", "electron-to-chromium": "^1.5.438", "node-releases": "^2.0.57", "update-browserslist-db": "^1.3.3" }, "bin": { "browserslist": "cli.js" } }, "sha512-AUdjuRyCNGUYtqpqfTmWyM4fXay8yIQhmLnvYe/THMGfT9B/34X7xQd3ifKxwyNPPpowVBjLb+64BN9Rn1mizw=="],
+
+    "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
     "bundle-name": ["bundle-name@4.1.0", "", { "dependencies": { "run-applescript": "^7.0.0" } }, "sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q=="],
 
@@ -1214,6 +1279,8 @@
     "range-parser": ["range-parser@1.3.0", "", {}, "sha512-hek2mFQpPuI4E1BBKrSto+BU3e3x4xuarsbiwr3+lf7p44juvFMV0XFWQAP3xUyqXA4RrXLIoaSUGbSt056ZMw=="],
 
     "raw-body": ["raw-body@3.0.2", "", { "dependencies": { "bytes": "~3.1.2", "http-errors": "~2.0.1", "iconv-lite": "~0.7.0", "unpipe": "~1.0.0" } }, "sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA=="],
+
+    "rawapay": ["rawapay@workspace:packages/rawapay"],
 
     "rawapay-docs": ["rawapay-docs@workspace:apps/docs"],
 
