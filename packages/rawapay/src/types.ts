@@ -31,12 +31,10 @@ export interface UniversalPaymentParams {
 	amount: number;
 	/** Customer's mobile phone number (03xxxxxxxxx) */
 	phone: string;
-	/** Unified merchant order reference across providers */
-	referenceId: string;
 	/** Last 6 digits or full 13-digit CNIC (for JazzCash) */
 	cnic?: string;
+	/** Short memo, note, or developer's merchant order reference (e.g. "ORDER-9042") */
 	description?: string;
-	emailAddress?: string;
 	[key: string]: unknown;
 }
 
@@ -55,7 +53,7 @@ export type CreatePaymentOptions =
 export interface PaymentStatusOptions {
 	/** Target provider: "jazzcash" | "easypaisa" */
 	provider: "jazzcash" | "easypaisa" | (string & {});
-	/** Unified reference ID for the transaction */
-	referenceId: string;
+	/** Unique payment ID returned from payment.create */
+	paymentId: string;
 	[key: string]: unknown;
 }

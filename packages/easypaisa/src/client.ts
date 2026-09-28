@@ -10,6 +10,7 @@ import {
 	success,
 	DEFAULT_PAYMENT_ENVIRONMENT,
 	DEFAULT_TIMEOUT_MS,
+	generateTxnRefNo,
 } from "@rawapay/core";
 
 import type { EasyPaisaConfig, EasyPaisaGetStatusParams, EasyPaisaMAParams, EasyPaisaRawMARequest, EasyPaisaRawResponse } from "./types";
@@ -75,19 +76,17 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 		}
 
 		const normalizedPhone = phoneResult.data;
-		const referenceId = params.referenceId;
-		const orderId = referenceId;
+		const id = generateTxnRefNo("T");
 		const amountStr = amountResult.data.toFixed(2);
 		const description = params.description || `Payment of PKR ${params.amount}`;
 
 		// 2. Build Payload
 		const payload: EasyPaisaRawMARequest = {
-			orderId,
-			storeId: this.config.storeId!,
+			orderId: id,
+			storeId: this.config.storeId,
 			transactionAmount: amountStr,
 			transactionType: "MA",
 			mobileAccountNo: normalizedPhone,
-			...(params.emailAddress ? { emailAddress: params.emailAddress } : {}),
 		};
 
 		// 3. Select Gateway Endpoint
@@ -134,13 +133,12 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 				const responseCode = String(rawJson.responseCode).trim();
 				if (responseCode === "0000") {
 					const payment: Payment = {
-						id: rawJson.transactionId || orderId,
+						id,
 						provider: "easypaisa",
 						status: "succeeded",
 						amount: params.amount,
 						rawAmount: amountStr,
 						currency: "PKR",
-						referenceId,
 						description,
 						responseCode,
 						responseMessage: rawJson.responseDesc || "SUCCESS",
@@ -205,12 +203,12 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 	 * Checks the status of a previously initiated EasyPaisa transaction.
 	 */
 	async getStatus(params: EasyPaisaGetStatusParams): Promise<Result<Payment, RawaPayError>> {
-		const orderId = params.referenceId;
-		if (!orderId) {
+		const paymentId = params.paymentId;
+		if (!paymentId) {
 			return failure(
 				new RawaPayError({
 					code: "INVALID_PARAMETER",
-					message: "Transaction referenceId is required to check EasyPaisa status.",
+					message: "paymentId is required to check EasyPaisa status.",
 					provider: "easypaisa",
 					statusCode: 400,
 				}),
@@ -218,7 +216,7 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 		}
 
 		const payload = {
-			orderId,
+			orderId: paymentId,
 			storeId: this.config.storeId!,
 			transactionType: "MA",
 		};
@@ -256,12 +254,11 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 				const responseCode = String(rawJson.responseCode).trim();
 				if (responseCode === "0000") {
 					const payment: Payment = {
-						id: rawJson.transactionId || orderId,
+						id: paymentId,
 						provider: "easypaisa",
 						status: "succeeded",
 						amount: 0,
 						currency: "PKR",
-						referenceId: orderId,
 						responseCode,
 						responseMessage: rawJson.responseDesc || "SUCCESS",
 						raw: rawJson as Record<string, unknown>,

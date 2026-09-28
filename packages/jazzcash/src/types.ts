@@ -5,11 +5,11 @@ import type { BasePaymentParams, BaseProviderConfig, GetStatusParams } from "@ra
  */
 export interface JazzCashConfig extends BaseProviderConfig {
 	/** Assigned Merchant ID from JazzCash (pp_MerchantID) */
-	merchantId?: string;
+	merchantId: string;
 	/** Merchant API Password (pp_Password) */
-	password?: string;
+	password: string;
 	/** Cryptographic Integrity Salt / Hash Key for HMAC-SHA256 (pp_IntegritySalt) */
-	integritySalt?: string;
+	integritySalt: string;
 }
 
 /**
@@ -20,10 +20,6 @@ export interface JazzCashMWalletParams extends BasePaymentParams {
 	phone: string;
 	/** Last 6 digits of customer's CNIC or full 13-digit CNIC (e.g. "123456" or "42101-1234567-1") */
 	cnic?: string;
-	/** Optional custom transaction datetime in YYYYMMDDHHMMSS format */
-	txnDateTime?: string;
-	/** Optional custom expiry datetime in YYYYMMDDHHMMSS format */
-	txnExpiryDateTime?: string;
 }
 
 /**

@@ -127,10 +127,9 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 		const normalizedPhone = phoneResult.data;
 		const normalizedCnic = cnicResult.data;
 		const amountInPaisa = formatToPaisa(amountResult.data);
-		const txnRefNo = generateTxnRefNo("T");
-		const txnDateTime = params.txnDateTime || formatDateTime();
-		const txnExpiryDateTime = params.txnExpiryDateTime || formatExpiryDateTime(1);
-		const referenceId = params.referenceId;
+		const id = generateTxnRefNo("T");
+		const txnDateTime = formatDateTime();
+		const txnExpiryDateTime = formatExpiryDateTime(1);
 		const description = params.description || `Payment of PKR ${params.amount}`;
 
 		// 2. Build Raw Payload (without hash first)
@@ -138,13 +137,13 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 			pp_Version: "2.0",
 			pp_TxnType: "MWALLET",
 			pp_Language: "EN",
-			pp_MerchantID: this.config.merchantId!,
-			pp_Password: this.config.password!,
-			pp_TxnRefNo: txnRefNo,
+			pp_MerchantID: this.config.merchantId,
+			pp_Password: this.config.password,
+			pp_TxnRefNo: id,
 			pp_Amount: amountInPaisa,
 			pp_TxnCurrency: "PKR",
 			pp_TxnDateTime: txnDateTime,
-			pp_BillReference: referenceId,
+			pp_BillReference: id,
 			pp_Description: description,
 			pp_TxnExpiryDateTime: txnExpiryDateTime,
 			pp_MobileNumber: normalizedPhone,
@@ -152,7 +151,7 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 		};
 
 		// 3. Compute pp_SecureHash
-		const pp_SecureHash = calculateSecureHash(payloadWithoutHash, this.config.integritySalt!);
+		const pp_SecureHash = calculateSecureHash(payloadWithoutHash, this.config.integritySalt);
 
 		const fullPayload: JazzCashRawMWalletRequest = {
 			...payloadWithoutHash,
@@ -213,13 +212,12 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 
 			if (responseCode === "000" || responseCode === "121" || responseCode === "124") {
 				const payment: Payment = {
-					id: rawJson.pp_TxnRefNo || txnRefNo,
+					id,
 					provider: "jazzcash",
 					status: "pending",
 					amount: params.amount,
 					rawAmount: amountInPaisa,
 					currency: "PKR",
-					referenceId,
 					description,
 					responseCode,
 					responseMessage:
@@ -263,12 +261,12 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 	 * Checks the status of a previously initiated JazzCash transaction.
 	 */
 	async getStatus(params: JazzCashGetStatusParams): Promise<Result<Payment, RawaPayError>> {
-		const txnRefNo = params.referenceId;
-		if (!txnRefNo) {
+		const paymentId = params.paymentId;
+		if (!paymentId) {
 			return failure(
 				new RawaPayError({
 					code: "INVALID_PARAMETER",
-					message: "Transaction referenceId is required to check JazzCash status.",
+					message: "paymentId is required to check JazzCash status.",
 					provider: "jazzcash",
 					statusCode: 400,
 				}),
@@ -278,7 +276,7 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 		const payloadWithoutHash: Record<string, string> = {
 			pp_MerchantID: this.config.merchantId!,
 			pp_Password: this.config.password!,
-			pp_TxnRefNo: txnRefNo,
+			pp_TxnRefNo: paymentId,
 		};
 
 		const pp_SecureHash = calculateSecureHash(payloadWithoutHash, this.config.integritySalt!);
@@ -330,17 +328,17 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 
 			const responseCode = String(rawJson.pp_ResponseCode || "").trim();
 			const amount = rawJson.pp_Amount ? Number.parseFloat(rawJson.pp_Amount) / 100 : 0;
-			const referenceId = (rawJson.pp_BillReference as string) || txnRefNo;
+			const description = rawJson.pp_Description as string | undefined;
 
 			if (responseCode === "000") {
 				return success({
-					id: rawJson.pp_TxnRefNo || txnRefNo,
+					id: paymentId,
 					provider: "jazzcash",
 					status: "succeeded",
 					amount,
 					rawAmount: rawJson.pp_Amount,
 					currency: "PKR",
-					referenceId,
+					description,
 					responseCode,
 					responseMessage: rawJson.pp_ResponseMessage || "Transaction Successful",
 					retrievalRefNo: rawJson.pp_RetreivalReferenceNo,
@@ -351,13 +349,13 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 
 			if (responseCode === "121" || responseCode === "124") {
 				return success({
-					id: rawJson.pp_TxnRefNo || txnRefNo,
+					id: paymentId,
 					provider: "jazzcash",
 					status: "pending",
 					amount,
 					rawAmount: rawJson.pp_Amount,
 					currency: "PKR",
-					referenceId,
+					description,
 					responseCode,
 					responseMessage: rawJson.pp_ResponseMessage || "Waiting for customer authorization",
 					retrievalRefNo: rawJson.pp_RetreivalReferenceNo,

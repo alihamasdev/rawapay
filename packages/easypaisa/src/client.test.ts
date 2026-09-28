@@ -76,7 +76,6 @@ describe("EasyPaisa Driver & Error Mapping", () => {
 		const res = await driver.createPayment({
 			amount: 100,
 			phone: "invalid_phone",
-			referenceId: "EP-TEST-001",
 		});
 
 		expect(res.error).toBeDefined();

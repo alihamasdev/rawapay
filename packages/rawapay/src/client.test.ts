@@ -95,7 +95,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 500,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "ORDER-UNCONF-1",
 		});
 
 		expect(data).toBeNull();
@@ -121,7 +120,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 500,
 			phone: "invalid_phone",
 			cnic: "123456",
-			referenceId: "ORDER-VAL-1",
 		});
 		expect(res1.data).toBeNull();
 		expect(res1.error?.code).toBe("INVALID_PARAMETER");
@@ -133,7 +131,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 500,
 			phone: "03001234567",
 			cnic: "123",
-			referenceId: "ORDER-VAL-2",
 		});
 		expect(res2.data).toBeNull();
 		expect(res2.error?.code).toBe("INVALID_PARAMETER");
@@ -145,7 +142,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: -100,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "ORDER-VAL-3",
 		});
 		expect(res3.data).toBeNull();
 		expect(res3.error?.code).toBe("INVALID_PARAMETER");
@@ -184,17 +180,17 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 1500,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "BILL-TEST-1",
+			description: "BILL-TEST-1",
 		});
 
 		expect(error).toBeNull();
 		expect(data).toBeDefined();
-		expect(data?.id).toBe("T2026092610123456");
+		expect(data?.id).toMatch(/^T\d+/);
 		expect(data?.status).toBe("pending");
 		expect(data?.amount).toBe(1500);
 		expect(data?.rawAmount).toBe("150000");
 		expect(data?.currency).toBe("PKR");
-		expect(data?.referenceId).toBe("BILL-TEST-1");
+		expect(data?.description).toBe("BILL-TEST-1");
 		expect(data?.retrievalRefNo).toBe("62691234567");
 	});
 
@@ -228,7 +224,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 50000,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "BILL-ERR-119",
 		});
 
 		expect(data).toBeNull();
@@ -268,7 +263,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 1000,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "BILL-ERR-120",
 		});
 
 		expect(data).toBeNull();
@@ -306,7 +300,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 1000,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "BILL-ERR-122",
 		});
 
 		expect(data).toBeNull();
@@ -343,16 +336,16 @@ describe("RawaPay Universal SDK Client", () => {
 			provider: "easypaisa",
 			amount: 850,
 			phone: "03451234567",
-			referenceId: "ORDER-EP-101",
+			description: "ORDER-EP-101",
 		});
 
 		expect(error).toBeNull();
 		expect(data).toBeDefined();
-		expect(data?.id).toBe("EP_TXN_9988");
+		expect(data?.id).toMatch(/^T\d+/);
 		expect(data?.status).toBe("succeeded");
 		expect(data?.provider).toBe("easypaisa");
 		expect(data?.amount).toBe(850);
-		expect(data?.referenceId).toBe("ORDER-EP-101");
+		expect(data?.description).toBe("ORDER-EP-101");
 	});
 
 	it("handles EasyPaisa insufficient funds (responseCode: 0013)", async () => {
@@ -382,7 +375,6 @@ describe("RawaPay Universal SDK Client", () => {
 			provider: "easypaisa",
 			amount: 5000,
 			phone: "03451234567",
-			referenceId: "ORDER-EP-102",
 		});
 
 		expect(data).toBeNull();
@@ -438,7 +430,6 @@ describe("RawaPay Universal SDK Client", () => {
 			provider: "jazzcash",
 			amount: 1000,
 			phone: "03001234567",
-			referenceId: "BILL-NO-CNIC",
 		});
 
 		expect(data).toBeNull();
@@ -446,7 +437,7 @@ describe("RawaPay Universal SDK Client", () => {
 		expect(error?.message).toContain("customer CNIC");
 	});
 
-	it("maps unified referenceId properly in JazzCash and EasyPaisa payments", async () => {
+	it("generates unique transaction id and maps to pp_TxnRefNo & pp_BillReference in JazzCash and orderId in EasyPaisa", async () => {
 		let capturedJazzCashBody: Record<string, unknown> = {};
 		let capturedEasyPaisaBody: Record<string, unknown> = {};
 
@@ -463,14 +454,14 @@ describe("RawaPay Universal SDK Client", () => {
 			},
 		});
 
-		// Test JazzCash with unified referenceId
+		// Test JazzCash ID generation & mapping
 		mockFetch(async (_url, options) => {
 			capturedJazzCashBody = JSON.parse(options?.body as string);
 			return new Response(
 				JSON.stringify({
 					pp_ResponseCode: "000",
 					pp_ResponseMessage: "Transaction Successful",
-					pp_TxnRefNo: "T123456",
+					pp_TxnRefNo: capturedJazzCashBody.pp_TxnRefNo,
 					pp_BillReference: capturedJazzCashBody.pp_BillReference,
 				}),
 				{ status: 200, headers: { "Content-Type": "application/json" } },
@@ -482,14 +473,17 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 1000,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "ORDER-UNI-101",
+			description: "ORDER-UNI-101",
 		});
 
 		expect(jcRes.error).toBeNull();
-		expect(capturedJazzCashBody.pp_BillReference).toBe("ORDER-UNI-101");
-		expect(jcRes.data?.referenceId).toBe("ORDER-UNI-101");
+		expect(capturedJazzCashBody.pp_TxnRefNo).toMatch(/^T\d+/);
+		expect(capturedJazzCashBody.pp_BillReference).toBe(capturedJazzCashBody.pp_TxnRefNo);
+		expect(capturedJazzCashBody.pp_Description).toBe("ORDER-UNI-101");
+		expect(jcRes.data?.id).toBe(capturedJazzCashBody.pp_TxnRefNo as string);
+		expect(jcRes.data?.description).toBe("ORDER-UNI-101");
 
-		// Test EasyPaisa with unified referenceId
+		// Test EasyPaisa ID generation & mapping
 		mockFetch(async (_url, options) => {
 			capturedEasyPaisaBody = JSON.parse(options?.body as string);
 			return new Response(
@@ -507,12 +501,13 @@ describe("RawaPay Universal SDK Client", () => {
 			provider: "easypaisa",
 			amount: 500,
 			phone: "03451234567",
-			referenceId: "ORDER-UNI-102",
+			description: "ORDER-UNI-102",
 		});
 
 		expect(epRes.error).toBeNull();
-		expect(capturedEasyPaisaBody.orderId).toBe("ORDER-UNI-102");
-		expect(epRes.data?.referenceId).toBe("ORDER-UNI-102");
+		expect(capturedEasyPaisaBody.orderId).toMatch(/^T\d+/);
+		expect(epRes.data?.id).toBe(capturedEasyPaisaBody.orderId as string);
+		expect(epRes.data?.description).toBe("ORDER-UNI-102");
 	});
 
 	it("successfully checks JazzCash transaction status via pay.payment.status", async () => {
@@ -523,7 +518,7 @@ describe("RawaPay Universal SDK Client", () => {
 					pp_ResponseMessage: "Transaction Successful",
 					pp_TxnRefNo: "T998877",
 					pp_Amount: "250000",
-					pp_BillReference: "ORDER-JC-202",
+					pp_Description: "ORDER-JC-202",
 				}),
 				{ status: 200, headers: { "Content-Type": "application/json" } },
 			);
@@ -541,7 +536,7 @@ describe("RawaPay Universal SDK Client", () => {
 
 		const { data, error } = await pay.payment.status({
 			provider: "jazzcash",
-			referenceId: "T998877",
+			paymentId: "T998877",
 		});
 
 		expect(error).toBeNull();
@@ -549,7 +544,7 @@ describe("RawaPay Universal SDK Client", () => {
 		expect(data?.id).toBe("T998877");
 		expect(data?.status).toBe("succeeded");
 		expect(data?.amount).toBe(2500);
-		expect(data?.referenceId).toBe("ORDER-JC-202");
+		expect(data?.description).toBe("ORDER-JC-202");
 	});
 
 	it("successfully checks EasyPaisa transaction status via pay.payment.status", async () => {
@@ -575,14 +570,13 @@ describe("RawaPay Universal SDK Client", () => {
 
 		const { data, error } = await pay.payment.status({
 			provider: "easypaisa",
-			referenceId: "ORDER-EP-303",
+			paymentId: "ORDER-EP-303",
 		});
 
 		expect(error).toBeNull();
 		expect(data).toBeDefined();
-		expect(data?.id).toBe("EP-INQ-101");
+		expect(data?.id).toBe("ORDER-EP-303");
 		expect(data?.status).toBe("succeeded");
-		expect(data?.referenceId).toBe("ORDER-EP-303");
 	});
 
 	it("treats JazzCash createPayment success (000, 121, 124) as pending customer authorization", async () => {
@@ -614,7 +608,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 500,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "ORDER-PEND-1",
 		});
 
 		expect(res1.error).toBeNull();
@@ -638,7 +631,6 @@ describe("RawaPay Universal SDK Client", () => {
 			amount: 500,
 			phone: "03001234567",
 			cnic: "123456",
-			referenceId: "ORDER-PEND-2",
 		});
 
 		expect(res2.error).toBeNull();
@@ -672,7 +664,7 @@ describe("RawaPay Universal SDK Client", () => {
 
 		const inqPending = await pay.payment.status({
 			provider: "jazzcash",
-			referenceId: "T-INQ-124",
+			paymentId: "T-INQ-124",
 		});
 
 		expect(inqPending.error).toBeNull();
@@ -694,7 +686,7 @@ describe("RawaPay Universal SDK Client", () => {
 
 		const inqSuccess = await pay.payment.status({
 			provider: "jazzcash",
-			referenceId: "T-INQ-000",
+			paymentId: "T-INQ-000",
 		});
 
 		expect(inqSuccess.error).toBeNull();

@@ -5,7 +5,7 @@ import type { BasePaymentParams, BaseProviderConfig, GetStatusParams } from "@ra
  */
 export interface EasyPaisaConfig extends BaseProviderConfig {
 	/** Assigned Store ID from EasyPaisa Merchant Portal */
-	storeId?: string;
+	storeId: string;
 	/** Optional API Username (used for Basic Auth if required) */
 	username?: string;
 	/** Optional API Password */
@@ -21,8 +21,6 @@ export interface EasyPaisaConfig extends BaseProviderConfig {
 export interface EasyPaisaMAParams extends BasePaymentParams {
 	/** Customer's EasyPaisa mobile phone number (03xxxxxxxxx) */
 	phone: string;
-	/** Optional customer email address for receipt */
-	emailAddress?: string;
 }
 
 /**
@@ -39,7 +37,6 @@ export interface EasyPaisaRawMARequest {
 	transactionAmount: string;
 	transactionType: "MA";
 	mobileAccountNo: string;
-	emailAddress?: string;
 	[key: string]: unknown;
 }
 
