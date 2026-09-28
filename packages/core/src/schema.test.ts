@@ -19,23 +19,31 @@ describe("Core Validation & Formatting", () => {
 		expect(normalizePakistaniPhone(" 0300-1234567 ")).toBe("03001234567");
 	});
 
-	it("strictly rejects international formats (+92, 92) and invalid phone numbers", () => {
-		expect(() => phoneSchema.parse("+923001234567")).toThrow();
-		expect(() => phoneSchema.parse("923001234567")).toThrow();
+	it("normalizes international formats (+92, 92) and 10-digit formats to standard 03... format", () => {
+		expect(phoneSchema.parse("+923001234567")).toBe("03001234567");
+		expect(phoneSchema.parse("923001234567")).toBe("03001234567");
+		expect(phoneSchema.parse("+92 300 1234567")).toBe("03001234567");
+		expect(phoneSchema.parse("3001234567")).toBe("03001234567");
+		expect(isValidPakistaniPhone("+923001234567")).toBe(true);
+		expect(isValidPakistaniPhone("923001234567")).toBe(true);
+	});
+
+	it("strictly rejects invalid phone numbers", () => {
 		expect(() => phoneSchema.parse("04212345678")).toThrow();
 		expect(() => phoneSchema.parse("03001234")).toThrow();
 		expect(() => phoneSchema.parse("abcdefghijk")).toThrow();
-		expect(isValidPakistaniPhone("+923001234567")).toBe(false);
-		expect(isValidPakistaniPhone("923001234567")).toBe(false);
+		expect(isValidPakistaniPhone("04212345678")).toBe(false);
 	});
 
-	it("validates CNIC with cnicSchema (strictly 6 digits)", () => {
+	it("validates CNIC with cnicSchema (accepting 6-digit suffix or full 13 digits)", () => {
 		expect(cnicSchema.parse("123456")).toBe("123456");
+		expect(cnicSchema.parse("42101-1234567-1")).toBe("345671"); // Extracts last 6 digits of "4210112345671" -> "345671"
+		expect(cnicSchema.parse("4210112345671")).toBe("345671");
 		expect(() => cnicSchema.parse("12345")).toThrow();
 		expect(() => cnicSchema.parse("1234567")).toThrow();
-		expect(() => cnicSchema.parse("42101-1234567-1")).toThrow();
 		expect(() => cnicSchema.parse("abcdef")).toThrow();
 		expect(isValidCnic("123456")).toBe(true);
+		expect(isValidCnic("42101-1234567-1")).toBe(true);
 		expect(isValidCnic("12345")).toBe(false);
 	});
 
@@ -51,8 +59,9 @@ describe("Core Validation & Formatting", () => {
 		expect(() => positiveAmountSchema.parse(-10)).toThrow();
 	});
 
-	it("formats date to YYYYMMDDHHMMSS", () => {
-		const fixedDate = new Date(2026, 8, 26, 14, 30, 45); // Month is 0-indexed: 8 = September
-		expect(formatDateTime(fixedDate)).toBe("20260926143045");
+	it("formats date to YYYYMMDDHHMMSS in PKT timezone", () => {
+		// 2026-09-26T09:30:45Z in UTC is 2026-09-26T14:30:45 in Asia/Karachi (UTC+5)
+		const utcDate = new Date("2026-09-26T09:30:45Z");
+		expect(formatDateTime(utcDate)).toBe("20260926143045");
 	});
 });

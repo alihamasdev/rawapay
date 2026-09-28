@@ -1,9 +1,9 @@
-import type { BasePaymentParams } from "@rawapay/core";
+import type { BasePaymentParams, BaseProviderConfig, GetStatusParams } from "@rawapay/core";
 
 /**
  * Configuration options required to initialize the EasyPaisa driver.
  */
-export interface EasyPaisaConfig {
+export interface EasyPaisaConfig extends BaseProviderConfig {
 	/** Assigned Store ID from EasyPaisa Merchant Portal */
 	storeId?: string;
 	/** Optional API Username (used for Basic Auth if required) */
@@ -12,8 +12,6 @@ export interface EasyPaisaConfig {
 	password?: string;
 	/** Optional Hash Key for message integrity verification */
 	hashKey?: string;
-	/** Environment mode: "sandbox" for staging testing, "production" for live transactions. Defaults to "sandbox" */
-	environment?: "sandbox" | "production";
 }
 
 /**
@@ -25,9 +23,12 @@ export interface EasyPaisaMAParams extends BasePaymentParams {
 	phone: string;
 	/** Optional customer email address for receipt */
 	emailAddress?: string;
-	/** Optional custom order ID. Generated automatically if omitted. */
-	orderId?: string;
 }
+
+/**
+ * Parameters for checking the status of an EasyPaisa transaction.
+ */
+export interface EasyPaisaGetStatusParams extends GetStatusParams {}
 
 /**
  * Raw JSON request payload sent to the EasyPaisa Direct Pay API.

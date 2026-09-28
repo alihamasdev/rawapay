@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
  * Calculates the HMAC-SHA256 signature (pp_SecureHash) for JazzCash transactions.
@@ -38,6 +38,7 @@ export function calculateSecureHash(params: Record<string, unknown>, integritySa
 
 /**
  * Verifies that a response payload's pp_SecureHash matches the calculated hash.
+ * Uses constant-time buffer comparison (timingSafeEqual) to prevent timing attacks.
  *
  * @param response JazzCash response payload
  * @param integritySalt The secret integrity salt
@@ -50,5 +51,12 @@ export function verifySecureHash(response: Record<string, unknown>, integritySal
 	}
 
 	const computedHash = calculateSecureHash(response, integritySalt);
-	return receivedHash.toUpperCase() === computedHash;
+	const receivedBuf = Buffer.from(receivedHash.toUpperCase(), "utf8");
+	const computedBuf = Buffer.from(computedHash, "utf8");
+
+	if (receivedBuf.length !== computedBuf.length) {
+		return false;
+	}
+
+	return timingSafeEqual(receivedBuf, computedBuf);
 }

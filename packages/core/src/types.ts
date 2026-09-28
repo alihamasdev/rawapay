@@ -18,7 +18,7 @@ export type Result<T, E = RawaPayError> = SuccessResult<T> | ErrorResult<E>;
 /**
  * Normalized payment statuses across all providers.
  */
-export type PaymentStatus = "succeeded" | "pending" | "processing" | "failed" | "cancelled" | "expired" | "refunded";
+export type PaymentStatus = "succeeded" | "pending" | "processing" | "failed" | "cancelled" | "expired";
 
 /**
  * Standardized payment entity returned to developers.
@@ -26,18 +26,18 @@ export type PaymentStatus = "succeeded" | "pending" | "processing" | "failed" | 
 export interface Payment {
 	/** Unique transaction identifier from the payment gateway */
 	id: string;
-	/** Provider used for this payment, e.g. "jazzcash" */
+	/** Provider used for this payment, e.g. "jazzcash", "easypaisa" */
 	provider: string;
 	/** Standardized lifecycle status of the transaction */
 	status: PaymentStatus;
 	/** Payment amount in Pakistani Rupees (PKR) */
 	amount: number;
-	/** Raw amount sent to provider (e.g. paisas string for JazzCash) */
-	ppAmount?: string;
+	/** Raw amount formatted for the gateway */
+	rawAmount?: string;
 	/** Currency code, always PKR */
 	currency: "PKR";
-	/** Merchant bill or order reference */
-	billReference: string;
+	/** Unified merchant order reference */
+	referenceId: string;
 	/** Human-readable memo or description */
 	description?: string;
 	/** Gateway raw response code (e.g. "000") */
@@ -56,7 +56,6 @@ export interface Payment {
  * Unified error codes categorized across all payment providers.
  */
 export type RawaPayErrorCode =
-	| "SUCCESS"
 	| "INVALID_REQUEST"
 	| "INVALID_PARAMETER"
 	| "INVALID_CREDENTIALS"
@@ -83,24 +82,59 @@ export type RawaPayErrorCode =
 export interface BasePaymentParams {
 	/** Payment amount in PKR */
 	amount: number;
-	/** Unique merchant order reference (generated automatically if not provided) */
-	billReference?: string;
+	/** Unified merchant order reference across providers
+	 * - orderId for easypaisa
+	 * - billReference for jazzcash
+	 */
+	referenceId: string;
 	/** Short memo or note describing the order */
 	description?: string;
 }
 
 /**
+ * Parameters for checking transaction status.
+ */
+export interface GetStatusParams {
+	/** Unified merchant order reference */
+	referenceId: string;
+	[key: string]: unknown;
+}
+
+/**
  * Interface that each provider driver must implement.
  */
-export interface PaymentDriver<TPaymentParams = unknown> {
+export interface PaymentDriver<TPaymentParams = unknown, TStatusParams = GetStatusParams> {
 	/** Unique identifier for the provider driver (e.g. "jazzcash") */
 	readonly name: string;
 
 	/** Direct payment initiation */
 	createPayment(params: TPaymentParams): Promise<Result<Payment, RawaPayError>>;
+
+	/** Checks status for a previously initiated transaction */
+	getStatus(params: TStatusParams): Promise<Result<Payment, RawaPayError>>;
+
+	/** Verifies the cryptographic signature / integrity of an incoming IPN callback */
+	verifyCallback?(body: Record<string, unknown>): boolean;
 }
 
 /**
  * Execution environment for payment providers and RawaPay.
  */
-export type RawaPayEnvironment = "sandbox" | "production";
+export type PaymentEnvironment = "sandbox" | "production";
+
+/**
+ * Options configurable at top level or per provider.
+ */
+export interface ProviderOptions {
+	/** Target environment mode: "sandbox" or "production" */
+	environment?: PaymentEnvironment;
+	/** HTTP request timeout in milliseconds */
+	timeoutMs?: number;
+}
+
+/**
+ * Base configuration extended by all provider drivers.
+ */
+export interface BaseProviderConfig {
+	options?: ProviderOptions;
+}

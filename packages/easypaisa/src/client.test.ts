@@ -8,7 +8,9 @@ describe("EasyPaisa Driver & Error Mapping", () => {
 		expect(() => {
 			new EasyPaisaDriver({
 				storeId: "",
-				environment: "sandbox",
+				options: {
+					environment: "sandbox",
+				},
 			});
 		}).toThrow();
 	});
@@ -66,12 +68,15 @@ describe("EasyPaisa Driver & Error Mapping", () => {
 	it("validates phone number format before dispatching network request", async () => {
 		const driver = new EasyPaisaDriver({
 			storeId: "12345",
-			environment: "sandbox",
+			options: {
+				environment: "sandbox",
+			},
 		});
 
 		const res = await driver.createPayment({
 			amount: 100,
 			phone: "invalid_phone",
+			referenceId: "EP-TEST-001",
 		});
 
 		expect(res.error).toBeDefined();

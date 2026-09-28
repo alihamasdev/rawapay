@@ -1,23 +1,15 @@
-import type { BasePaymentParams } from "@rawapay/core";
+import type { BasePaymentParams, BaseProviderConfig, GetStatusParams } from "@rawapay/core";
 
 /**
  * Configuration options required to initialize the JazzCash driver.
  */
-export interface JazzCashConfig {
+export interface JazzCashConfig extends BaseProviderConfig {
 	/** Assigned Merchant ID from JazzCash (pp_MerchantID) */
 	merchantId?: string;
 	/** Merchant API Password (pp_Password) */
 	password?: string;
 	/** Cryptographic Integrity Salt / Hash Key for HMAC-SHA256 (pp_IntegritySalt) */
 	integritySalt?: string;
-	/** Environment mode: "sandbox" for testing, "production" for live transactions. @default "sandbox" */
-	environment?: "sandbox" | "production";
-	/** Optional callback / return URL (pp_ReturnURL) */
-	returnUrl?: string;
-	/** Optional custom API version @default "2.0" */
-	version?: string;
-	/** Optional language @default "EN" */
-	language?: string;
 }
 
 /**
@@ -26,15 +18,18 @@ export interface JazzCashConfig {
 export interface JazzCashMWalletParams extends BasePaymentParams {
 	/** Customer's JazzCash mobile phone number (e.g. "03001234567") */
 	phone: string;
-	/** Last 6 digits of customer's CNIC tied to the JazzCash mobile wallet (e.g. "123456") */
+	/** Last 6 digits of customer's CNIC or full 13-digit CNIC (e.g. "123456" or "42101-1234567-1") */
 	cnic?: string;
-	/** Optional custom transaction reference (pp_TxnRefNo). Generated automatically if omitted. */
-	txnRefNo?: string;
 	/** Optional custom transaction datetime in YYYYMMDDHHMMSS format */
 	txnDateTime?: string;
 	/** Optional custom expiry datetime in YYYYMMDDHHMMSS format */
 	txnExpiryDateTime?: string;
 }
+
+/**
+ * Parameters for checking the status of a JazzCash transaction.
+ */
+export interface JazzCashGetStatusParams extends GetStatusParams {}
 
 /**
  * Raw JSON request payload sent to the JazzCash DoMWalletTransaction endpoint.

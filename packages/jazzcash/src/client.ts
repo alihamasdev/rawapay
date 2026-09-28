@@ -13,17 +13,27 @@ import {
 	cnicSchema,
 	positiveAmountSchema,
 	assertServerEnv,
+	DEFAULT_PAYMENT_ENVIRONMENT,
+	DEFAULT_TIMEOUT_MS,
 } from "@rawapay/core";
 
-import type { JazzCashConfig, JazzCashMWalletParams, JazzCashRawMWalletRequest, JazzCashRawResponse } from "./types";
+import type {
+	JazzCashConfig,
+	JazzCashGetStatusParams,
+	JazzCashMWalletParams,
+	JazzCashRawMWalletRequest,
+	JazzCashRawResponse,
+} from "./types";
 
-import { calculateSecureHash } from "./crypto";
+import { calculateSecureHash, verifySecureHash } from "./crypto";
 import { mapJazzCashError } from "./errors";
 
 const JAZZCASH_SANDBOX_URL = "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction";
 const JAZZCASH_PRODUCTION_URL = "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction";
+const JAZZCASH_SANDBOX_INQUIRY_URL = "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/PaymentInquiry";
+const JAZZCASH_PRODUCTION_INQUIRY_URL = "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/PaymentInquiry";
 
-export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
+export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, JazzCashGetStatusParams> {
 	readonly name = "jazzcash";
 	readonly config: JazzCashConfig;
 
@@ -53,10 +63,11 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 		}
 
 		this.config = {
-			version: "2.0",
-			language: "EN",
-			environment: "sandbox",
 			...config,
+			options: {
+				environment: config.options?.environment ?? DEFAULT_PAYMENT_ENVIRONMENT,
+				timeoutMs: config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+			},
 		};
 	}
 
@@ -65,7 +76,7 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 	 * Triggers a real-time USSD push prompt on the customer's mobile handset for MPIN entry.
 	 */
 	async createPayment(params: JazzCashMWalletParams): Promise<Result<Payment, RawaPayError>> {
-		// 1. Validate Input Parameters with Zod
+		// 1. Validate Input Parameters
 		const amountResult = positiveAmountSchema.safeParse(params.amount);
 		if (!amountResult.success) {
 			return failure(
@@ -90,6 +101,17 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 			);
 		}
 
+		if (!params.cnic) {
+			return failure(
+				new RawaPayError({
+					code: "INVALID_PARAMETER",
+					message: "JazzCash mobile wallet payment requires customer CNIC (last 6 digits or full 13-digit CNIC).",
+					provider: "jazzcash",
+					statusCode: 400,
+				}),
+			);
+		}
+
 		const cnicResult = cnicSchema.safeParse(params.cnic);
 		if (!cnicResult.success) {
 			return failure(
@@ -105,33 +127,29 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 		const normalizedPhone = phoneResult.data;
 		const normalizedCnic = cnicResult.data;
 		const amountInPaisa = formatToPaisa(amountResult.data);
-		const txnRefNo = params.txnRefNo || generateTxnRefNo("T");
+		const txnRefNo = generateTxnRefNo("T");
 		const txnDateTime = params.txnDateTime || formatDateTime();
 		const txnExpiryDateTime = params.txnExpiryDateTime || formatExpiryDateTime(1);
-		const billReference = params.billReference || `BILL-${txnRefNo}`;
+		const referenceId = params.referenceId;
 		const description = params.description || `Payment of PKR ${params.amount}`;
 
 		// 2. Build Raw Payload (without hash first)
 		const payloadWithoutHash: Record<string, string> = {
-			pp_Version: this.config.version ?? "2.0",
+			pp_Version: "2.0",
 			pp_TxnType: "MWALLET",
-			pp_Language: this.config.language ?? "EN",
+			pp_Language: "EN",
 			pp_MerchantID: this.config.merchantId!,
 			pp_Password: this.config.password!,
 			pp_TxnRefNo: txnRefNo,
 			pp_Amount: amountInPaisa,
 			pp_TxnCurrency: "PKR",
 			pp_TxnDateTime: txnDateTime,
-			pp_BillReference: billReference,
+			pp_BillReference: referenceId,
 			pp_Description: description,
 			pp_TxnExpiryDateTime: txnExpiryDateTime,
 			pp_MobileNumber: normalizedPhone,
 			pp_CNIC: normalizedCnic,
 		};
-
-		if (this.config.returnUrl) {
-			payloadWithoutHash.pp_ReturnURL = this.config.returnUrl;
-		}
 
 		// 3. Compute pp_SecureHash
 		const pp_SecureHash = calculateSecureHash(payloadWithoutHash, this.config.integritySalt!);
@@ -142,7 +160,8 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 		} as JazzCashRawMWalletRequest;
 
 		// 4. Select Gateway Endpoint
-		const endpoint = this.config.environment === "production" ? JAZZCASH_PRODUCTION_URL : JAZZCASH_SANDBOX_URL;
+		const endpoint = this.config.options?.environment === "production" ? JAZZCASH_PRODUCTION_URL : JAZZCASH_SANDBOX_URL;
+		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
 		// 5. Execute HTTP Request
 		try {
@@ -153,6 +172,7 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 					Accept: "application/json",
 				},
 				body: JSON.stringify(fullPayload),
+				signal: AbortSignal.timeout(timeoutMs),
 			});
 
 			if (!res.ok) {
@@ -170,40 +190,41 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 
 			const rawJson = (await res.json()) as JazzCashRawResponse;
 
-			// 6. Handle Gateway Response Codes
-			const responseCode = String(rawJson.pp_ResponseCode || "").trim();
-
-			if (responseCode === "000" || responseCode === "121") {
-				const payment: Payment = {
-					id: rawJson.pp_TxnRefNo || txnRefNo,
-					provider: "jazzcash",
-					status: "succeeded",
-					amount: params.amount,
-					ppAmount: amountInPaisa,
-					currency: "PKR",
-					billReference,
-					description,
-					responseCode,
-					responseMessage: rawJson.pp_ResponseMessage || "Transaction Successful",
-					retrievalRefNo: rawJson.pp_RetreivalReferenceNo,
-					raw: rawJson as Record<string, unknown>,
-					createdAt: new Date().toISOString(),
-				};
-				return success(payment);
+			// Verify response hash if present
+			if (rawJson.pp_SecureHash && !verifySecureHash(rawJson as Record<string, unknown>, this.config.integritySalt!)) {
+				return failure(
+					new RawaPayError({
+						code: "INVALID_SIGNATURE",
+						message: "JazzCash response integrity hash verification failed.",
+						provider: "jazzcash",
+						statusCode: 400,
+						rawResponse: rawJson,
+					}),
+				);
 			}
 
-			if (responseCode === "124") {
+			// 6. Handle Gateway Response Codes
+			// For direct MWALLET payments, 000, 121, and 124 indicate that the push / USSD prompt
+			// has been successfully dispatched to the customer's handset.
+			// The transaction is NOT final until the customer enters their MPIN.
+			// Therefore, createPayment returns status: "pending". Confirmation is achieved via
+			// status inquiry (pay.payment.status) or a verified IPN callback (pay.verifyCallback).
+			const responseCode = String(rawJson.pp_ResponseCode || "").trim();
+
+			if (responseCode === "000" || responseCode === "121" || responseCode === "124") {
 				const payment: Payment = {
 					id: rawJson.pp_TxnRefNo || txnRefNo,
 					provider: "jazzcash",
 					status: "pending",
 					amount: params.amount,
-					ppAmount: amountInPaisa,
+					rawAmount: amountInPaisa,
 					currency: "PKR",
-					billReference,
+					referenceId,
 					description,
 					responseCode,
-					responseMessage: rawJson.pp_ResponseMessage || "Waiting for customer authorization",
+					responseMessage:
+						rawJson.pp_ResponseMessage ||
+						(responseCode === "000" ? "Transaction Accepted / Waiting for MPIN Authorization" : "Waiting for customer authorization"),
 					retrievalRefNo: rawJson.pp_RetreivalReferenceNo,
 					raw: rawJson as Record<string, unknown>,
 					createdAt: new Date().toISOString(),
@@ -214,6 +235,17 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 			// Map failure response code
 			return failure(mapJazzCashError(rawJson));
 		} catch (err: unknown) {
+			if (err instanceof Error && err.name === "TimeoutError") {
+				return failure(
+					new RawaPayError({
+						code: "GATEWAY_ERROR",
+						message: `JazzCash request timed out after ${timeoutMs}ms`,
+						provider: "jazzcash",
+						statusCode: 408,
+						isRetryable: true,
+					}),
+				);
+			}
 			const errMessage = err instanceof Error ? err.message : String(err);
 			return failure(
 				new RawaPayError({
@@ -225,5 +257,151 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams> {
 				}),
 			);
 		}
+	}
+
+	/**
+	 * Checks the status of a previously initiated JazzCash transaction.
+	 */
+	async getStatus(params: JazzCashGetStatusParams): Promise<Result<Payment, RawaPayError>> {
+		const txnRefNo = params.referenceId;
+		if (!txnRefNo) {
+			return failure(
+				new RawaPayError({
+					code: "INVALID_PARAMETER",
+					message: "Transaction referenceId is required to check JazzCash status.",
+					provider: "jazzcash",
+					statusCode: 400,
+				}),
+			);
+		}
+
+		const payloadWithoutHash: Record<string, string> = {
+			pp_MerchantID: this.config.merchantId!,
+			pp_Password: this.config.password!,
+			pp_TxnRefNo: txnRefNo,
+		};
+
+		const pp_SecureHash = calculateSecureHash(payloadWithoutHash, this.config.integritySalt!);
+		const fullPayload = {
+			...payloadWithoutHash,
+			pp_SecureHash,
+		};
+
+		const endpoint = this.config.options?.environment === "production" ? JAZZCASH_PRODUCTION_INQUIRY_URL : JAZZCASH_SANDBOX_INQUIRY_URL;
+		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+		try {
+			const res = await fetch(endpoint, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json",
+				},
+				body: JSON.stringify(fullPayload),
+				signal: AbortSignal.timeout(timeoutMs),
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text().catch(() => "");
+				return failure(
+					new RawaPayError({
+						code: "GATEWAY_ERROR",
+						message: `JazzCash inquiry server returned HTTP ${res.status}: ${errorText || res.statusText}`,
+						provider: "jazzcash",
+						statusCode: res.status,
+						isRetryable: res.status >= 500,
+					}),
+				);
+			}
+
+			const rawJson = (await res.json()) as JazzCashRawResponse;
+
+			if (rawJson.pp_SecureHash && !verifySecureHash(rawJson as Record<string, unknown>, this.config.integritySalt!)) {
+				return failure(
+					new RawaPayError({
+						code: "INVALID_SIGNATURE",
+						message: "JazzCash inquiry response integrity hash verification failed.",
+						provider: "jazzcash",
+						statusCode: 400,
+						rawResponse: rawJson,
+					}),
+				);
+			}
+
+			const responseCode = String(rawJson.pp_ResponseCode || "").trim();
+			const amount = rawJson.pp_Amount ? Number.parseFloat(rawJson.pp_Amount) / 100 : 0;
+			const referenceId = (rawJson.pp_BillReference as string) || txnRefNo;
+
+			if (responseCode === "000") {
+				return success({
+					id: rawJson.pp_TxnRefNo || txnRefNo,
+					provider: "jazzcash",
+					status: "succeeded",
+					amount,
+					rawAmount: rawJson.pp_Amount,
+					currency: "PKR",
+					referenceId,
+					responseCode,
+					responseMessage: rawJson.pp_ResponseMessage || "Transaction Successful",
+					retrievalRefNo: rawJson.pp_RetreivalReferenceNo,
+					raw: rawJson as Record<string, unknown>,
+					createdAt: new Date().toISOString(),
+				});
+			}
+
+			if (responseCode === "121" || responseCode === "124") {
+				return success({
+					id: rawJson.pp_TxnRefNo || txnRefNo,
+					provider: "jazzcash",
+					status: "pending",
+					amount,
+					rawAmount: rawJson.pp_Amount,
+					currency: "PKR",
+					referenceId,
+					responseCode,
+					responseMessage: rawJson.pp_ResponseMessage || "Waiting for customer authorization",
+					retrievalRefNo: rawJson.pp_RetreivalReferenceNo,
+					raw: rawJson as Record<string, unknown>,
+					createdAt: new Date().toISOString(),
+				});
+			}
+
+			return failure(mapJazzCashError(rawJson));
+		} catch (err: unknown) {
+			if (err instanceof Error && err.name === "TimeoutError") {
+				return failure(
+					new RawaPayError({
+						code: "GATEWAY_ERROR",
+						message: `JazzCash inquiry timed out after ${timeoutMs}ms`,
+						provider: "jazzcash",
+						statusCode: 408,
+						isRetryable: true,
+					}),
+				);
+			}
+			const errMessage = err instanceof Error ? err.message : String(err);
+			return failure(
+				new RawaPayError({
+					code: "GATEWAY_ERROR",
+					message: `Failed to connect to JazzCash inquiry gateway: ${errMessage}`,
+					provider: "jazzcash",
+					statusCode: 502,
+					isRetryable: true,
+				}),
+			);
+		}
+	}
+
+	/**
+	 * Verifies an incoming JazzCash IPN / callback request payload.
+	 * Recomputes HMAC-SHA256 signature using the merchant's integritySalt
+	 * and verifies against pp_SecureHash using constant-time buffer comparison.
+	 *
+	 * @param body Callback request body payload
+	 * @returns boolean true if signature is authentic, false otherwise
+	 */
+	verifyCallback(body: Record<string, unknown>): boolean {
+		if (!this.config.integritySalt || !body) return false;
+		return verifySecureHash(body, this.config.integritySalt);
 	}
 }

@@ -5,20 +5,23 @@ import {
 	RawaPayError,
 	assertServerEnv,
 	failure,
-	generateTxnRefNo,
 	phoneSchema,
 	positiveAmountSchema,
 	success,
+	DEFAULT_PAYMENT_ENVIRONMENT,
+	DEFAULT_TIMEOUT_MS,
 } from "@rawapay/core";
 
-import type { EasyPaisaConfig, EasyPaisaMAParams, EasyPaisaRawMARequest, EasyPaisaRawResponse } from "./types";
+import type { EasyPaisaConfig, EasyPaisaGetStatusParams, EasyPaisaMAParams, EasyPaisaRawMARequest, EasyPaisaRawResponse } from "./types";
 
 import { mapEasyPaisaError } from "./errors";
 
 const EASYPAISA_SANDBOX_URL = "https://easypaystg.easypaisa.com.pk/easypay-service/rest/v4/initiate-ma-transaction";
 const EASYPAISA_PRODUCTION_URL = "https://easypay.easypaisa.com.pk/easypay-service/rest/v4/initiate-ma-transaction";
+const EASYPAISA_SANDBOX_INQUIRY_URL = "https://easypaystg.easypaisa.com.pk/easypay-service/rest/v4/inquire-transaction";
+const EASYPAISA_PRODUCTION_INQUIRY_URL = "https://easypay.easypaisa.com.pk/easypay-service/rest/v4/inquire-transaction";
 
-export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
+export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPaisaGetStatusParams> {
 	readonly name = "easypaisa";
 	readonly config: EasyPaisaConfig;
 
@@ -34,8 +37,11 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 		}
 
 		this.config = {
-			environment: "sandbox",
 			...config,
+			options: {
+				environment: config.options?.environment ?? DEFAULT_PAYMENT_ENVIRONMENT,
+				timeoutMs: config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+			},
 		};
 	}
 
@@ -69,7 +75,8 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 		}
 
 		const normalizedPhone = phoneResult.data;
-		const orderId = params.orderId || generateTxnRefNo("EP");
+		const referenceId = params.referenceId;
+		const orderId = referenceId;
 		const amountStr = amountResult.data.toFixed(2);
 		const description = params.description || `Payment of PKR ${params.amount}`;
 
@@ -80,11 +87,12 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 			transactionAmount: amountStr,
 			transactionType: "MA",
 			mobileAccountNo: normalizedPhone,
-			emailAddress: params.emailAddress || "",
+			...(params.emailAddress ? { emailAddress: params.emailAddress } : {}),
 		};
 
 		// 3. Select Gateway Endpoint
-		const endpoint = this.config.environment === "production" ? EASYPAISA_PRODUCTION_URL : EASYPAISA_SANDBOX_URL;
+		const endpoint = this.config.options?.environment === "production" ? EASYPAISA_PRODUCTION_URL : EASYPAISA_SANDBOX_URL;
+		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
 		// 4. Headers & Credentials
 		const headers: Record<string, string> = {
@@ -98,12 +106,20 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 			headers.Authorization = `Basic ${token}`;
 		}
 
+		// Note on hashKey / Request Integrity:
+		// EasyPaisa integration specifications vary by merchant agreement. Standard REST v4 MA
+		// transactions use HTTP Basic Auth. Some enterprise merchants receive an integration pack
+		// specifying HMAC-SHA256 request body signing or RSA private-key signatures using hashKey.
+		// TODO: If your EasyPaisa contract requires signed requests, confirm your integration pack
+		// with EasyPaisa merchant integration support before enabling signature headers.
+
 		// 5. Execute HTTP Request
 		try {
 			const res = await fetch(endpoint, {
 				method: "POST",
 				headers,
 				body: JSON.stringify(payload),
+				signal: AbortSignal.timeout(timeoutMs),
 			});
 
 			let rawJson: EasyPaisaRawResponse | null = null;
@@ -122,8 +138,9 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 						provider: "easypaisa",
 						status: "succeeded",
 						amount: params.amount,
+						rawAmount: amountStr,
 						currency: "PKR",
-						billReference: orderId,
+						referenceId,
 						description,
 						responseCode,
 						responseMessage: rawJson.responseDesc || "SUCCESS",
@@ -160,6 +177,17 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 				}),
 			);
 		} catch (err: unknown) {
+			if (err instanceof Error && err.name === "TimeoutError") {
+				return failure(
+					new RawaPayError({
+						code: "GATEWAY_ERROR",
+						message: `EasyPaisa request timed out after ${timeoutMs}ms`,
+						provider: "easypaisa",
+						statusCode: 408,
+						isRetryable: true,
+					}),
+				);
+			}
 			const errMessage = err instanceof Error ? err.message : String(err);
 			return failure(
 				new RawaPayError({
@@ -171,5 +199,139 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams> {
 				}),
 			);
 		}
+	}
+
+	/**
+	 * Checks the status of a previously initiated EasyPaisa transaction.
+	 */
+	async getStatus(params: EasyPaisaGetStatusParams): Promise<Result<Payment, RawaPayError>> {
+		const orderId = params.referenceId;
+		if (!orderId) {
+			return failure(
+				new RawaPayError({
+					code: "INVALID_PARAMETER",
+					message: "Transaction referenceId is required to check EasyPaisa status.",
+					provider: "easypaisa",
+					statusCode: 400,
+				}),
+			);
+		}
+
+		const payload = {
+			orderId,
+			storeId: this.config.storeId!,
+			transactionType: "MA",
+		};
+
+		const endpoint = this.config.options?.environment === "production" ? EASYPAISA_PRODUCTION_INQUIRY_URL : EASYPAISA_SANDBOX_INQUIRY_URL;
+		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+		const headers: Record<string, string> = {
+			"Content-Type": "application/json",
+			Accept: "application/json",
+		};
+
+		if (this.config.username && this.config.password) {
+			const token = Buffer.from(`${this.config.username}:${this.config.password}`).toString("base64");
+			headers.Credentials = token;
+			headers.Authorization = `Basic ${token}`;
+		}
+
+		try {
+			const res = await fetch(endpoint, {
+				method: "POST",
+				headers,
+				body: JSON.stringify(payload),
+				signal: AbortSignal.timeout(timeoutMs),
+			});
+
+			let rawJson: EasyPaisaRawResponse | null = null;
+			try {
+				rawJson = (await res.json()) as EasyPaisaRawResponse;
+			} catch {
+				// Response was not JSON
+			}
+
+			if (rawJson && rawJson.responseCode) {
+				const responseCode = String(rawJson.responseCode).trim();
+				if (responseCode === "0000") {
+					const payment: Payment = {
+						id: rawJson.transactionId || orderId,
+						provider: "easypaisa",
+						status: "succeeded",
+						amount: 0,
+						currency: "PKR",
+						referenceId: orderId,
+						responseCode,
+						responseMessage: rawJson.responseDesc || "SUCCESS",
+						raw: rawJson as Record<string, unknown>,
+						createdAt: new Date().toISOString(),
+					};
+					return success(payment);
+				}
+
+				return failure(mapEasyPaisaError(rawJson));
+			}
+
+			if (!res.ok) {
+				const errorText = await res.text().catch(() => "");
+				return failure(
+					new RawaPayError({
+						code: "GATEWAY_ERROR",
+						message: `EasyPaisa inquiry returned HTTP ${res.status}: ${errorText || res.statusText || "Request failed"}`,
+						provider: "easypaisa",
+						statusCode: res.status,
+						isRetryable: res.status >= 500,
+					}),
+				);
+			}
+
+			return failure(
+				new RawaPayError({
+					code: "GATEWAY_ERROR",
+					message: "EasyPaisa inquiry returned an unexpected empty or invalid response.",
+					provider: "easypaisa",
+					statusCode: 502,
+					isRetryable: true,
+				}),
+			);
+		} catch (err: unknown) {
+			if (err instanceof Error && err.name === "TimeoutError") {
+				return failure(
+					new RawaPayError({
+						code: "GATEWAY_ERROR",
+						message: `EasyPaisa inquiry request timed out after ${timeoutMs}ms`,
+						provider: "easypaisa",
+						statusCode: 408,
+						isRetryable: true,
+					}),
+				);
+			}
+			const errMessage = err instanceof Error ? err.message : String(err);
+			return failure(
+				new RawaPayError({
+					code: "GATEWAY_ERROR",
+					message: `Failed to connect to EasyPaisa inquiry gateway: ${errMessage}`,
+					provider: "easypaisa",
+					statusCode: 502,
+					isRetryable: true,
+				}),
+			);
+		}
+	}
+
+	/**
+	 * Verifies an incoming EasyPaisa IPN / callback request payload.
+	 *
+	 * Note: Standard EasyPaisa Mobile Account (MA) IPN notifications do not include
+	 * a symmetric HMAC signature in the notify payload (unlike JazzCash pp_SecureHash).
+	 * For EasyPaisa callbacks, merchants should verify transaction settlement status
+	 * directly with EasyPaisa using payment.status() or allowlist EasyPaisa notification IPs.
+	 *
+	 * @param _body The callback request body
+	 * @returns false as standard EasyPaisa MA callbacks do not use an HMAC signature
+	 */
+	verifyCallback(_body: Record<string, unknown>): boolean {
+		return false;
 	}
 }

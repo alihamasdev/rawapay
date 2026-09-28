@@ -78,5 +78,17 @@ describe("JazzCash Cryptographic Engine", () => {
 			pp_Amount: "100000", // Tampered amount
 		};
 		expect(verifySecureHash(tamperedPayload, salt)).toBeFalse();
+
+		// Lowercase hash should also verify (case-insensitive)
+		const lowercaseHashPayload = {
+			...response,
+			pp_SecureHash: signature.toLowerCase(),
+		};
+		expect(verifySecureHash(lowercaseHashPayload, salt)).toBeTrue();
+
+		// Missing or non-string hash should fail safely
+		expect(verifySecureHash(response, salt)).toBeFalse();
+		expect(verifySecureHash({ ...response, pp_SecureHash: "" }, salt)).toBeFalse();
+		expect(verifySecureHash({ ...response, pp_SecureHash: 123456 as any }, salt)).toBeFalse();
 	});
 });
