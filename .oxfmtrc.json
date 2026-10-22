@@ -1,5 +1,6 @@
 {
 	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"ignorePatterns": [".agents/"],
 	"semi": true,
 	"tabWidth": 2,
 	"useTabs": true,
@@ -8,23 +9,22 @@
 	"trailingComma": "all",
 	"jsxSingleQuote": false,
 	"objectWrap": "preserve",
+	"experimentalSortPackageJson": {
+		"sortScripts": true
+	},
 	"experimentalTailwindcss": {
-		"stylesheet": "./packages/ui/src/styles/globals.css",
+		"preserveWhitespace": false,
+		"preserveDuplicates": false,
 		"attributes": ["class", "className"],
 		"functions": ["clsx", "cn", "cva", "useRender"],
-		"preserveDuplicates": false,
-		"preserveWhitespace": false
+		"stylesheet": "./packages/ui/src/styles/globals.css"
 	},
 	"experimentalSortImports": {
 		"groups": [
-			"type-import",
-			["value-builtin", "value-external"],
-			"type-internal",
-			"value-internal",
-			["type-parent", "type-sibling", "type-index"],
-			["value-parent", "value-sibling", "value-index"],
+			["type-builtin", "value-builtin", "type-external", "value-external"],
+			["type-internal", "value-internal"],
+			["type-parent", "type-sibling", "type-index", "value-parent", "value-sibling", "value-index"],
 			"unknown"
 		]
-	},
-	"ignorePatterns": []
+	}
 }

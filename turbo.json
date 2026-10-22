@@ -18,6 +18,6 @@
 			"persistent": true
 		}
 	},
-	"globalEnv": ["CI", "NODE_ENV", "VERCEL", "VERCEL_ENV", "VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL", "_VARLOCK_ENV_KEY"],
+	"globalEnv": ["CI", "NODE_ENV", "VERCEL", "VERCEL_ENV", "VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL"],
 	"globalDependencies": [".env*", "apps/*/.env*", "packages/*/.env*"]
 }

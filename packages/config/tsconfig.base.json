@@ -5,8 +5,9 @@
 		"module": "ESNext",
 		"moduleResolution": "bundler",
 		"lib": ["ESNext"],
-		"verbatimModuleSyntax": true,
 		"strict": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		"types": ["node", "bun"]
