@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"ignorePatterns": [".agents/"],
+	"ignorePatterns": ["node_modules", ".agents/", ".next/", ".turbo/", ".source/", ".vercel/"],
 	"plugins": ["react", "nextjs", "node", "typescript", "import", "unicorn", "oxc"],
 	"jsPlugins": [],
 	"categories": {

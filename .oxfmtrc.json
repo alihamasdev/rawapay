@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/oxfmt/configuration_schema.json",
-	"ignorePatterns": [".agents/"],
+	"ignorePatterns": ["node_modules", ".agents/", ".next/", ".turbo/", ".source/", ".vercel/"],
 	"semi": true,
 	"tabWidth": 2,
 	"useTabs": true,
@@ -9,17 +9,17 @@
 	"trailingComma": "all",
 	"jsxSingleQuote": false,
 	"objectWrap": "preserve",
-	"experimentalSortPackageJson": {
+	"sortPackageJson": {
 		"sortScripts": true
 	},
-	"experimentalTailwindcss": {
+	"sortTailwindcss": {
 		"preserveWhitespace": false,
 		"preserveDuplicates": false,
 		"attributes": ["class", "className"],
-		"functions": ["clsx", "cn", "cva", "useRender"],
+		"functions": ["cn", "cva", "useRender"],
 		"stylesheet": "./packages/ui/src/styles/globals.css"
 	},
-	"experimentalSortImports": {
+	"sortImports": {
 		"groups": [
 			["type-builtin", "value-builtin", "type-external", "value-external"],
 			["type-internal", "value-internal"],
