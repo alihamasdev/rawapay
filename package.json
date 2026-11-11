@@ -7,35 +7,35 @@
 			"packages/*"
 		],
 		"catalog": {
-			"zod": "^4.6.7",
+			"cn": "^0.5.2",
+			"next": "^16.4.6",
 			"typescript": "^7.0.2",
 			"@types/node": "^26.6.6",
-			"lucide-react": "^1.70.0",
+			"lucide-react": "^1.72.0",
 			"react": "^19.3.1",
 			"react-dom": "^19.3.1",
-			"@tailwindcss/postcss": "^4.3.4",
+			"@tailwindcss/postcss": "^4.3.5",
 			"@types/react": "^19.3.0",
 			"@types/react-dom": "^19.3.0",
-			"tailwindcss": "^4.3.4"
+			"tailwindcss": "^4.3.5"
 		}
 	},
 	"type": "module",
 	"scripts": {
 		"build": "turbo run build",
-		"check": "oxlint --fix && oxfmt --write",
+		"check": "tailwint \"apps/web/src/**/*.tsx\" && oxlint --fix && oxfmt --write",
 		"check-types": "turbo run check-types",
 		"dev": "turbo run dev",
 		"dev:web": "turbo run dev -F web --"
 	},
-	"dependencies": {
-		"zod": "catalog:"
-	},
 	"devDependencies": {
 		"@rawapay/config": "workspace:*",
-		"@types/bun": "^1.4.4",
+		"@tailwindcss/language-server": "^0.16.0",
 		"@types/node": "catalog:",
-		"oxfmt": "^0.77.0",
-		"oxlint": "^1.92.0",
+		"lefthook": "^2.2.1",
+		"oxfmt": "^0.78.0",
+		"oxlint": "^1.93.0",
+		"tailwint": "^1.1.16",
 		"turbo": "^2.11.10",
 		"typescript": "catalog:"
 	},

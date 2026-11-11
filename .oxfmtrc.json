@@ -17,7 +17,7 @@
 		"preserveDuplicates": false,
 		"attributes": ["class", "className"],
 		"functions": ["cn", "cva", "useRender"],
-		"stylesheet": "./packages/ui/src/styles/globals.css"
+		"stylesheet": "./apps/web/src/index.css"
 	},
 	"sortImports": {
 		"groups": [

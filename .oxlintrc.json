@@ -1,12 +1,13 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 	"ignorePatterns": ["node_modules", ".agents/", ".next/", ".turbo/", ".source/", ".vercel/"],
-	"plugins": ["react", "nextjs", "node", "typescript", "import", "unicorn", "oxc"],
+	"plugins": ["react", "node", "typescript", "import", "react-perf", "unicorn", "promise", "oxc", "jsdoc"],
 	"jsPlugins": [],
 	"categories": {
 		"correctness": "warn"
 	},
 	"rules": {
+		"promise/no-callback-in-promise": "off",
 		"typescript/consistent-type-imports": ["warn", { "prefer": "type-imports", "fixStyle": "inline-type-imports" }]
 	},
 	"env": {
@@ -15,9 +16,6 @@
 	"settings": {
 		"react": {
 			"version": "19.3.1"
-		},
-		"tailwindcss": {
-			"callees": ["cva", "cn"]
 		}
 	}
 }

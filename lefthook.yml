@@ -1,0 +1,27 @@
+# Lefthook configuration
+# https://github.com/evilmartians/lefthook
+
+glob_matcher: doublestar
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: check-types
+      glob: "**/*.{ts,tsx,js,jsx}"
+      run: bun run check-types
+
+    - group:
+        piped: true
+        jobs:
+          - name: tailwint
+            glob: "apps/{web,docs}/**/*.{jsx,tsx,html,css,mdx}"
+            run: bun tailwint --fix {staged_files}
+            stage_fixed: true
+          - name: oxlint
+            glob: "**/*.{js,ts,jsx,tsx,mjs,cjs}"
+            run: bun oxlint --fix --no-error-on-unmatched-pattern {staged_files}
+            stage_fixed: true
+          - name: oxfmt
+            glob: "**/*.{js,ts,jsx,tsx,mjs,cjs,json,jsonc,css,scss}"
+            run: bun oxfmt --write --no-error-on-unmatched-pattern {staged_files}
+            stage_fixed: true
