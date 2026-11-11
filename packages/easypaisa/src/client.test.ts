@@ -8,9 +8,6 @@ describe("EasyPaisa Driver & Error Mapping", () => {
 		expect(() => {
 			new EasyPaisaDriver({
 				storeId: "",
-				options: {
-					environment: "sandbox",
-				},
 			});
 		}).toThrow();
 	});
@@ -68,9 +65,6 @@ describe("EasyPaisa Driver & Error Mapping", () => {
 	it("validates phone number format before dispatching network request", async () => {
 		const driver = new EasyPaisaDriver({
 			storeId: "12345",
-			options: {
-				environment: "sandbox",
-			},
 		});
 
 		const res = await driver.createPayment({

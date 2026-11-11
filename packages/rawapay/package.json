@@ -10,6 +10,14 @@
 		".": {
 			"import": "./src/index.ts",
 			"types": "./src/index.ts"
+		},
+		"./jazzcash": {
+			"import": "./src/jazzcash.ts",
+			"types": "./src/jazzcash.ts"
+		},
+		"./easypaisa": {
+			"import": "./src/easypaisa.ts",
+			"types": "./src/easypaisa.ts"
 		}
 	},
 	"scripts": {

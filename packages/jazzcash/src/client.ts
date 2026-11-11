@@ -1,6 +1,8 @@
 import {
 	type Payment,
 	type PaymentDriver,
+	type PaymentEnvironment,
+	type ProviderInitContext,
 	type Result,
 	RawaPayError,
 	failure,
@@ -17,6 +19,8 @@ import {
 	DEFAULT_TIMEOUT_MS,
 } from "@rawapay/core";
 
+import { calculateSecureHash, verifySecureHash } from "./crypto";
+import { mapJazzCashError } from "./errors";
 import type {
 	JazzCashConfig,
 	JazzCashGetStatusParams,
@@ -25,17 +29,16 @@ import type {
 	JazzCashRawResponse,
 } from "./types";
 
-import { calculateSecureHash, verifySecureHash } from "./crypto";
-import { mapJazzCashError } from "./errors";
-
 const JAZZCASH_SANDBOX_URL = "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction";
 const JAZZCASH_PRODUCTION_URL = "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction";
 const JAZZCASH_SANDBOX_INQUIRY_URL = "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/PaymentInquiry";
 const JAZZCASH_PRODUCTION_INQUIRY_URL = "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/PaymentInquiry";
 
-export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, JazzCashGetStatusParams> {
-	readonly name = "jazzcash";
+export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, JazzCashGetStatusParams, "jazzcash"> {
+	readonly name = "jazzcash" as const;
 	readonly config: JazzCashConfig;
+	environment: PaymentEnvironment = DEFAULT_PAYMENT_ENVIRONMENT;
+	timeoutMs: number = DEFAULT_TIMEOUT_MS;
 
 	constructor(config: JazzCashConfig) {
 		assertServerEnv("JazzCashDriver");
@@ -62,13 +65,15 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 			});
 		}
 
-		this.config = {
-			...config,
-			options: {
-				environment: config.options?.environment ?? DEFAULT_PAYMENT_ENVIRONMENT,
-				timeoutMs: config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-			},
-		};
+		this.config = config;
+	}
+
+	/**
+	 * Lifecycle hook called by RawaPay client upon initialization to propagate global settings.
+	 */
+	init(context: ProviderInitContext): void {
+		this.environment = context.environment;
+		this.timeoutMs = context.timeoutMs;
 	}
 
 	/**
@@ -159,8 +164,8 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 		} as JazzCashRawMWalletRequest;
 
 		// 4. Select Gateway Endpoint
-		const endpoint = this.config.options?.environment === "production" ? JAZZCASH_PRODUCTION_URL : JAZZCASH_SANDBOX_URL;
-		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+		const endpoint = this.environment === "production" ? JAZZCASH_PRODUCTION_URL : JAZZCASH_SANDBOX_URL;
+		const timeoutMs = this.timeoutMs;
 
 		// 5. Execute HTTP Request
 		try {
@@ -285,8 +290,8 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 			pp_SecureHash,
 		};
 
-		const endpoint = this.config.options?.environment === "production" ? JAZZCASH_PRODUCTION_INQUIRY_URL : JAZZCASH_SANDBOX_INQUIRY_URL;
-		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+		const endpoint = this.environment === "production" ? JAZZCASH_PRODUCTION_INQUIRY_URL : JAZZCASH_SANDBOX_INQUIRY_URL;
+		const timeoutMs = this.timeoutMs;
 
 		try {
 			const res = await fetch(endpoint, {
@@ -402,4 +407,12 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 		if (!this.config.integritySalt || !body) return false;
 		return verifySecureHash(body, this.config.integritySalt);
 	}
+}
+
+/**
+ * Factory helper for JazzCash provider.
+ * Allows adding JazzCash to `new RawaPay({ providers: [jazzcash(...)] })`.
+ */
+export function jazzcash(config: JazzCashConfig): JazzCashDriver {
+	return new JazzCashDriver(config);
 }

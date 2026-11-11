@@ -94,11 +94,53 @@ export interface GetStatusParams {
 }
 
 /**
+ * Execution environment for payment providers and RawaPay.
+ */
+export type PaymentEnvironment = "sandbox" | "production";
+
+/**
+ * Initialization context provided to drivers by the core client.
+ */
+export interface ProviderInitContext {
+	environment: PaymentEnvironment;
+	timeoutMs: number;
+}
+
+/**
+ * Supported or custom payment provider identifiers.
+ * Autocompletes built-in providers while accepting custom provider names.
+ */
+export type Provider = "jazzcash" | "easypaisa" | (string & {});
+
+/**
+ * Helper to infer the string literal name from a PaymentDriver or provider factory function.
+ */
+export type InferProviderName<T> = T extends { readonly name: infer N extends string }
+	? N
+	: T extends (...args: any[]) => { readonly name: infer N extends string }
+		? N
+		: string;
+
+/**
+ * Extracts a union of literal provider names from configured providers.
+ * If no providers are configured or if given an unconstrained array, defaults to `Provider`.
+ */
+export type ExtractProviderNames<TProviders extends readonly unknown[] | undefined> = TProviders extends readonly [unknown, ...unknown[]]
+	? InferProviderName<TProviders[number]>
+	: TProviders extends readonly (infer U)[]
+		? [U] extends [never]
+			? Provider
+			: string extends InferProviderName<U>
+				? Provider
+				: InferProviderName<U>
+		: Provider;
+
+/**
  * Interface that each provider driver must implement.
  */
-export interface PaymentDriver<TPaymentParams = unknown, TStatusParams = GetStatusParams> {
+export interface PaymentDriver<TPaymentParams = unknown, TStatusParams = GetStatusParams, TName extends string = string> {
 	/** Unique identifier for the provider driver (e.g. "jazzcash") */
-	readonly name: string;
+	readonly name: TName;
 
 	/** Direct payment initiation */
 	createPayment(params: TPaymentParams): Promise<Result<Payment, RawaPayError>>;
@@ -108,26 +150,50 @@ export interface PaymentDriver<TPaymentParams = unknown, TStatusParams = GetStat
 
 	/** Verifies the cryptographic signature / integrity of an incoming IPN callback */
 	verifyCallback?(body: Record<string, unknown>): boolean;
+
+	/** Optional lifecycle hook called by RawaPay client upon initialization */
+	init?(context: ProviderInitContext): void;
 }
 
 /**
- * Execution environment for payment providers and RawaPay.
+ * A provider can be an initialized PaymentDriver or a factory function.
  */
-export type PaymentEnvironment = "sandbox" | "production";
+export type PaymentProviderFactory<TDriver extends PaymentDriver = PaymentDriver> = (context: ProviderInitContext) => TDriver;
+
+export type PaymentProvider = PaymentDriver<any, any> | PaymentProviderFactory<any>;
 
 /**
- * Options configurable at top level or per provider.
+ * Generic options for payment creation in core.
  */
-export interface ProviderOptions {
-	/** Target environment mode: "sandbox" or "production" */
+export interface CreatePaymentOptions<TProvider extends string = Provider> extends BasePaymentParams {
+	/** Identifier of the target provider (e.g. "jazzcash", "easypaisa") */
+	provider: TProvider;
+	/** Customer mobile phone number (03xxxxxxxxx) */
+	phone?: string;
+	/** Last 6 digits or full 13-digit CNIC (for mobile wallets) */
+	cnic?: string;
+	[key: string]: unknown;
+}
+
+/**
+ * Options for checking transaction status in core.
+ */
+export interface PaymentStatusOptions<TProvider extends string = Provider> {
+	/** Identifier of the target provider (e.g. "jazzcash", "easypaisa") */
+	provider: TProvider;
+	/** Unified payment ID returned from payment.create */
+	paymentId: string;
+	[key: string]: unknown;
+}
+
+/**
+ * RawaPay initialization options.
+ */
+export interface RawaPayOptions<TProviders extends readonly PaymentProvider[] = readonly PaymentProvider[]> {
+	/** Target environment mode: "sandbox" or "production" (defaults to "sandbox") */
 	environment?: PaymentEnvironment;
-	/** HTTP request timeout in milliseconds */
+	/** HTTP request timeout in milliseconds (defaults to 30000) */
 	timeoutMs?: number;
-}
-
-/**
- * Base configuration extended by all provider drivers.
- */
-export interface BaseProviderConfig {
-	options?: ProviderOptions;
+	/** Configured payment providers passed as an array */
+	providers?: TProviders;
 }

@@ -1,9 +1,9 @@
-import type { BasePaymentParams, BaseProviderConfig, GetStatusParams } from "@rawapay/core";
+import type { BasePaymentParams, GetStatusParams } from "@rawapay/core";
 
 /**
  * Configuration options required to initialize the EasyPaisa driver.
  */
-export interface EasyPaisaConfig extends BaseProviderConfig {
+export interface EasyPaisaConfig {
 	/** Assigned Store ID from EasyPaisa Merchant Portal */
 	storeId: string;
 	/** Optional API Username (used for Basic Auth if required) */

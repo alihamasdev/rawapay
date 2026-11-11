@@ -1,9 +1,9 @@
-import type { BasePaymentParams, BaseProviderConfig, GetStatusParams } from "@rawapay/core";
+import type { BasePaymentParams, GetStatusParams } from "@rawapay/core";
 
 /**
  * Configuration options required to initialize the JazzCash driver.
  */
-export interface JazzCashConfig extends BaseProviderConfig {
+export interface JazzCashConfig {
 	/** Assigned Merchant ID from JazzCash (pp_MerchantID) */
 	merchantId: string;
 	/** Merchant API Password (pp_Password) */

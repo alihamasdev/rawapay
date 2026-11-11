@@ -1,6 +1,8 @@
 import {
 	type Payment,
 	type PaymentDriver,
+	type PaymentEnvironment,
+	type ProviderInitContext,
 	type Result,
 	RawaPayError,
 	assertServerEnv,
@@ -13,18 +15,19 @@ import {
 	generateTxnRefNo,
 } from "@rawapay/core";
 
-import type { EasyPaisaConfig, EasyPaisaGetStatusParams, EasyPaisaMAParams, EasyPaisaRawMARequest, EasyPaisaRawResponse } from "./types";
-
 import { mapEasyPaisaError } from "./errors";
+import type { EasyPaisaConfig, EasyPaisaGetStatusParams, EasyPaisaMAParams, EasyPaisaRawMARequest, EasyPaisaRawResponse } from "./types";
 
 const EASYPAISA_SANDBOX_URL = "https://easypaystg.easypaisa.com.pk/easypay-service/rest/v4/initiate-ma-transaction";
 const EASYPAISA_PRODUCTION_URL = "https://easypay.easypaisa.com.pk/easypay-service/rest/v4/initiate-ma-transaction";
 const EASYPAISA_SANDBOX_INQUIRY_URL = "https://easypaystg.easypaisa.com.pk/easypay-service/rest/v4/inquire-transaction";
 const EASYPAISA_PRODUCTION_INQUIRY_URL = "https://easypay.easypaisa.com.pk/easypay-service/rest/v4/inquire-transaction";
 
-export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPaisaGetStatusParams> {
-	readonly name = "easypaisa";
+export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPaisaGetStatusParams, "easypaisa"> {
+	readonly name = "easypaisa" as const;
 	readonly config: EasyPaisaConfig;
+	environment: PaymentEnvironment = DEFAULT_PAYMENT_ENVIRONMENT;
+	timeoutMs: number = DEFAULT_TIMEOUT_MS;
 
 	constructor(config: EasyPaisaConfig) {
 		assertServerEnv("EasyPaisaDriver");
@@ -37,13 +40,15 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 			});
 		}
 
-		this.config = {
-			...config,
-			options: {
-				environment: config.options?.environment ?? DEFAULT_PAYMENT_ENVIRONMENT,
-				timeoutMs: config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-			},
-		};
+		this.config = config;
+	}
+
+	/**
+	 * Lifecycle hook called by RawaPay client upon initialization to propagate global settings.
+	 */
+	init(context: ProviderInitContext): void {
+		this.environment = context.environment;
+		this.timeoutMs = context.timeoutMs;
 	}
 
 	/**
@@ -90,8 +95,8 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 		};
 
 		// 3. Select Gateway Endpoint
-		const endpoint = this.config.options?.environment === "production" ? EASYPAISA_PRODUCTION_URL : EASYPAISA_SANDBOX_URL;
-		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+		const endpoint = this.environment === "production" ? EASYPAISA_PRODUCTION_URL : EASYPAISA_SANDBOX_URL;
+		const timeoutMs = this.timeoutMs;
 
 		// 4. Headers & Credentials
 		const headers: Record<string, string> = {
@@ -221,8 +226,8 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 			transactionType: "MA",
 		};
 
-		const endpoint = this.config.options?.environment === "production" ? EASYPAISA_PRODUCTION_INQUIRY_URL : EASYPAISA_SANDBOX_INQUIRY_URL;
-		const timeoutMs = this.config.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+		const endpoint = this.environment === "production" ? EASYPAISA_PRODUCTION_INQUIRY_URL : EASYPAISA_SANDBOX_INQUIRY_URL;
+		const timeoutMs = this.timeoutMs;
 
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
@@ -331,4 +336,12 @@ export class EasyPaisaDriver implements PaymentDriver<EasyPaisaMAParams, EasyPai
 	verifyCallback(_body: Record<string, unknown>): boolean {
 		return false;
 	}
+}
+
+/**
+ * Factory helper for EasyPaisa provider.
+ * Allows adding EasyPaisa to `new RawaPay({ providers: [easypaisa(...)] })`.
+ */
+export function easypaisa(config: EasyPaisaConfig): EasyPaisaDriver {
+	return new EasyPaisaDriver(config);
 }

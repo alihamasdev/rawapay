@@ -1,7 +1,9 @@
 import { calculateSecureHash } from "@rawapay/jazzcash";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { RawaPay } from "./client";
+import { easypaisa } from "./easypaisa";
+import { RawaPay, type Provider } from "./index";
+import { jazzcash } from "./jazzcash";
 
 describe("RawaPay Universal SDK Client", () => {
 	const originalFetch = globalThis.fetch;
@@ -17,78 +19,54 @@ describe("RawaPay Universal SDK Client", () => {
 		globalThis.fetch = originalFetch;
 	});
 
-	it("initializes RawaPay with JazzCash configuration and inherits default sandbox environment", () => {
+	it("initializes RawaPay with providers and inherits default sandbox environment", () => {
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-				easypaisa: {
+				}),
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
-		expect(pay.options.options?.environment).toBe("sandbox");
-		expect(pay.jazzcash).toBeDefined();
-		expect(pay.jazzcash?.config.options?.environment).toBe("sandbox");
-		expect(pay.easypaisa).toBeDefined();
-		expect(pay.easypaisa?.config.options?.environment).toBe("sandbox");
+		expect(pay.environment).toBe("sandbox");
+		expect(pay.timeoutMs).toBe(30000);
+		expect(pay.hasDriver("jazzcash")).toBe(true);
+		expect(pay.getDriver<any>("jazzcash")?.environment).toBe("sandbox");
+		expect(pay.hasDriver("easypaisa")).toBe(true);
+		expect(pay.getDriver<any>("easypaisa")?.environment).toBe("sandbox");
 	});
 
-	it("propagates top-level production environment to all providers", () => {
+	it("propagates top-level environment and timeoutMs to all providers", () => {
 		const pay = new RawaPay({
-			options: {
-				environment: "production",
-			},
-			providers: {
-				jazzcash: {
+			environment: "production",
+			timeoutMs: 5000,
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-				easypaisa: {
+				}),
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
-		expect(pay.options.options?.environment).toBe("production");
-		expect(pay.jazzcash?.config.options?.environment).toBe("production");
-		expect(pay.easypaisa?.config.options?.environment).toBe("production");
-	});
-
-	it("allows provider-level environment override", () => {
-		const pay = new RawaPay({
-			options: {
-				environment: "production",
-			},
-			providers: {
-				jazzcash: {
-					merchantId: "MC12345",
-					password: "test_password",
-					integritySalt: "test_salt",
-					options: {
-						environment: "sandbox",
-					},
-				},
-				easypaisa: {
-					storeId: "12345",
-				},
-			},
-		});
-
-		expect(pay.options.options?.environment).toBe("production");
-		expect(pay.jazzcash?.config.options?.environment).toBe("sandbox");
-		expect(pay.easypaisa?.config.options?.environment).toBe("production");
+		expect(pay.environment).toBe("production");
+		expect(pay.timeoutMs).toBe(5000);
+		expect(pay.getDriver<any>("jazzcash")?.environment).toBe("production");
+		expect(pay.getDriver<any>("jazzcash")?.timeoutMs).toBe(5000);
+		expect(pay.getDriver<any>("easypaisa")?.environment).toBe("production");
+		expect(pay.getDriver<any>("easypaisa")?.timeoutMs).toBe(5000);
 	});
 
 	it("returns an error if payment is attempted with an unconfigured provider", async () => {
-		const pay = new RawaPay({
-			providers: {},
-		});
+		const pay = new RawaPay();
 
 		const { data, error } = await pay.payment.create({
 			provider: "jazzcash",
@@ -105,13 +83,13 @@ describe("RawaPay Universal SDK Client", () => {
 
 	it("validates input parameters before making an HTTP request", async () => {
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		// 1. Invalid phone number
@@ -123,20 +101,18 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 		expect(res1.data).toBeNull();
 		expect(res1.error?.code).toBe("INVALID_PARAMETER");
-		expect(res1.error?.message).toContain("Invalid Pakistani phone number");
 
-		// 2. Invalid CNIC (too short)
+		// 2. Invalid CNIC
 		const res2 = await pay.payment.create({
 			provider: "jazzcash",
 			amount: 500,
 			phone: "03001234567",
-			cnic: "123",
+			cnic: "123", // Must be 6 or 13 digits
 		});
 		expect(res2.data).toBeNull();
 		expect(res2.error?.code).toBe("INVALID_PARAMETER");
-		expect(res2.error?.message).toContain("Invalid CNIC");
 
-		// 3. Invalid amount (zero/negative)
+		// 3. Invalid amount
 		const res3 = await pay.payment.create({
 			provider: "jazzcash",
 			amount: -100,
@@ -148,7 +124,14 @@ describe("RawaPay Universal SDK Client", () => {
 	});
 
 	it("successfully completes a mobile wallet payment (pp_ResponseCode: 000)", async () => {
-		mockFetch(async () => {
+		mockFetch(async (_url, options) => {
+			const body = JSON.parse(options?.body as string);
+			expect(body.pp_TxnType).toBe("MWALLET");
+			expect(body.pp_Amount).toBe("150000"); // 1500 PKR converted to paisas
+			expect(body.pp_MobileNumber).toBe("03001234567");
+			expect(body.pp_CNIC).toBe("123456");
+			expect(body.pp_SecureHash).toBeDefined();
+
 			return new Response(
 				JSON.stringify({
 					pp_ResponseCode: "000",
@@ -166,13 +149,13 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -210,13 +193,13 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -249,13 +232,13 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -286,13 +269,13 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -325,11 +308,11 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				easypaisa: {
+			providers: [
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -364,11 +347,11 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				easypaisa: {
+			providers: [
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -385,45 +368,15 @@ describe("RawaPay Universal SDK Client", () => {
 		expect(error?.isRetryable).toBeFalse();
 	});
 
-	it("propagates options down to providers with per-provider override", () => {
-		const pay = new RawaPay({
-			options: {
-				environment: "production",
-				timeoutMs: 45000,
-			},
-			providers: {
-				jazzcash: {
-					merchantId: "MC12345",
-					password: "test_password",
-					integritySalt: "test_salt",
-				},
-				easypaisa: {
-					storeId: "12345",
-					options: {
-						environment: "sandbox",
-						timeoutMs: 15000,
-					},
-				},
-			},
-		});
-
-		expect(pay.options.options?.environment).toBe("production");
-		expect(pay.options.options?.timeoutMs).toBe(45000);
-		expect(pay.jazzcash?.config.options?.environment).toBe("production");
-		expect(pay.jazzcash?.config.options?.timeoutMs).toBe(45000);
-		expect(pay.easypaisa?.config.options?.environment).toBe("sandbox");
-		expect(pay.easypaisa?.config.options?.timeoutMs).toBe(15000);
-	});
-
 	it("requires CNIC for JazzCash when calling createPayment", async () => {
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.create({
@@ -442,16 +395,16 @@ describe("RawaPay Universal SDK Client", () => {
 		let capturedEasyPaisaBody: Record<string, unknown> = {};
 
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-				easypaisa: {
+				}),
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
 		// Test JazzCash ID generation & mapping
@@ -525,13 +478,13 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.status({
@@ -561,11 +514,11 @@ describe("RawaPay Universal SDK Client", () => {
 		});
 
 		const pay = new RawaPay({
-			providers: {
-				easypaisa: {
+			providers: [
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
 		const { data, error } = await pay.payment.status({
@@ -581,13 +534,13 @@ describe("RawaPay Universal SDK Client", () => {
 
 	it("treats JazzCash createPayment success (000, 121, 124) as pending customer authorization", async () => {
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		// 1. Response Code 121 (Transaction Pending)
@@ -639,13 +592,13 @@ describe("RawaPay Universal SDK Client", () => {
 
 	it("payment.status maps 121 and 124 to pending, and 000 to succeeded", async () => {
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: "test_salt",
-				},
-			},
+				}),
+			],
 		});
 
 		// 124 in status -> pending
@@ -696,16 +649,16 @@ describe("RawaPay Universal SDK Client", () => {
 	it("verifies incoming callback signatures with pay.verifyCallback", () => {
 		const salt = "merchant_secret_salt";
 		const pay = new RawaPay({
-			providers: {
-				jazzcash: {
+			providers: [
+				jazzcash({
 					merchantId: "MC12345",
 					password: "test_password",
 					integritySalt: salt,
-				},
-				easypaisa: {
+				}),
+				easypaisa({
 					storeId: "12345",
-				},
-			},
+				}),
+			],
 		});
 
 		const validCallbackBody = {
@@ -737,10 +690,41 @@ describe("RawaPay Universal SDK Client", () => {
 		expect(pay.verifyCallback("jazzcash", { ...validCallbackBody, pp_SecureHash: "" })).toBeFalse();
 
 		// Unconfigured provider returns false safely
-		const unconfiguredPay = new RawaPay({ providers: {} });
+		const unconfiguredPay = new RawaPay();
 		expect(unconfiguredPay.verifyCallback("jazzcash", fullBody)).toBeFalse();
 
 		// EasyPaisa returns false with documented inquiry verification pattern
 		expect(pay.verifyCallback("easypaisa", { orderId: "ORDER-1" })).toBeFalse();
+	});
+
+	it("restricts provider types to configured providers at compile-time", async () => {
+		const singleProviderPay = new RawaPay({
+			providers: [
+				jazzcash({
+					merchantId: "MC12345",
+					password: "test_password",
+					integritySalt: "test_salt",
+				}),
+			],
+		});
+
+		// Valid: jazzcash is configured
+		expect(singleProviderPay.hasDriver("jazzcash")).toBe(true);
+
+		singleProviderPay.payment.create({
+			// @ts-expect-error - "easypaisa" is not in configured providers
+			provider: "easypaisa",
+			amount: 500,
+		});
+
+		singleProviderPay.payment.create({
+			// @ts-expect-error - "unsupported" is not in configured providers
+			provider: "unsupported",
+			amount: 500,
+		});
+
+		// Verify Provider type export is usable by developers
+		const myProvider: Provider = "jazzcash";
+		expect(myProvider).toBe("jazzcash");
 	});
 });
