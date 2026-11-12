@@ -2,5 +2,6 @@ export * from "./types";
 export * from "./errors";
 export * from "./schema";
 export * from "./assert-server";
-export * from "./constants";
+export * from "./driver";
+export * from "./http";
 export * from "./client";

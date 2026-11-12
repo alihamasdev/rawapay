@@ -36,9 +36,9 @@ describe("RawaPay Universal SDK Client", () => {
 		expect(pay.environment).toBe("sandbox");
 		expect(pay.timeoutMs).toBe(30000);
 		expect(pay.hasDriver("jazzcash")).toBe(true);
-		expect(pay.getDriver<any>("jazzcash")?.environment).toBe("sandbox");
+		expect(pay.getDriver<any>("jazzcash")?.http.baseUrl).toBe("https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase");
 		expect(pay.hasDriver("easypaisa")).toBe(true);
-		expect(pay.getDriver<any>("easypaisa")?.environment).toBe("sandbox");
+		expect(pay.getDriver<any>("easypaisa")?.http.baseUrl).toBe("https://easypaystg.easypaisa.com.pk/easypay-service/rest/v4");
 	});
 
 	it("propagates top-level environment and timeoutMs to all providers", () => {
@@ -59,10 +59,10 @@ describe("RawaPay Universal SDK Client", () => {
 
 		expect(pay.environment).toBe("production");
 		expect(pay.timeoutMs).toBe(5000);
-		expect(pay.getDriver<any>("jazzcash")?.environment).toBe("production");
-		expect(pay.getDriver<any>("jazzcash")?.timeoutMs).toBe(5000);
-		expect(pay.getDriver<any>("easypaisa")?.environment).toBe("production");
-		expect(pay.getDriver<any>("easypaisa")?.timeoutMs).toBe(5000);
+		expect(pay.getDriver<any>("jazzcash")?.http.baseUrl).toBe("https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase");
+		expect(pay.getDriver<any>("jazzcash")?.http.timeoutMs).toBe(5000);
+		expect(pay.getDriver<any>("easypaisa")?.http.baseUrl).toBe("https://easypay.easypaisa.com.pk/easypay-service/rest/v4");
+		expect(pay.getDriver<any>("easypaisa")?.http.timeoutMs).toBe(5000);
 	});
 
 	it("returns an error if payment is attempted with an unconfigured provider", async () => {
@@ -726,5 +726,39 @@ describe("RawaPay Universal SDK Client", () => {
 		// Verify Provider type export is usable by developers
 		const myProvider: Provider = "jazzcash";
 		expect(myProvider).toBe("jazzcash");
+	});
+
+	it("injects custom fetch dispatcher across all configured providers", async () => {
+		let customFetchCalled = false;
+
+		const customFetch = async () => {
+			customFetchCalled = true;
+			return new Response(
+				JSON.stringify({
+					responseCode: "0000",
+					responseDesc: "SUCCESS",
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		};
+
+		const pay = new RawaPay({
+			fetch: customFetch as unknown as typeof fetch,
+			providers: [
+				easypaisa({
+					storeId: "12345",
+				}),
+			],
+		});
+
+		const { data, error } = await pay.payment.create({
+			provider: "easypaisa",
+			amount: 100,
+			phone: "03001234567",
+		});
+
+		expect(error).toBeNull();
+		expect(data?.status).toBe("succeeded");
+		expect(customFetchCalled).toBe(true);
 	});
 });

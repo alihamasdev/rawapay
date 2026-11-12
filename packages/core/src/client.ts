@@ -1,6 +1,7 @@
 import { assertServerEnv } from "./assert-server";
 import { DEFAULT_PAYMENT_ENVIRONMENT, DEFAULT_TIMEOUT_MS } from "./constants";
 import { RawaPayError, failure } from "./errors";
+import { HttpClient } from "./http";
 import type {
 	CreatePaymentOptions,
 	ExtractProviderNames,
@@ -9,7 +10,6 @@ import type {
 	PaymentEnvironment,
 	PaymentProvider,
 	PaymentStatusOptions,
-	ProviderInitContext,
 	RawaPayOptions,
 	Result,
 } from "./types";
@@ -25,6 +25,7 @@ export class RawaPay<
 	readonly environment: PaymentEnvironment;
 	readonly timeoutMs: number;
 	readonly providers: TProviders;
+	readonly httpClient: HttpClient;
 
 	private readonly drivers = new Map<string, PaymentDriver<any, any>>();
 
@@ -41,26 +42,31 @@ export class RawaPay<
 		this.environment = options.environment ?? DEFAULT_PAYMENT_ENVIRONMENT;
 		this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 		this.providers = (options.providers ?? []) as unknown as TProviders;
-
-		const initContext: ProviderInitContext = {
-			environment: this.environment,
-			timeoutMs: this.timeoutMs,
-		};
+		this.httpClient =
+			options.httpClient ??
+			new HttpClient({
+				timeoutMs: this.timeoutMs,
+				fetch: options.fetch,
+			});
 
 		for (const item of this.providers as readonly PaymentProvider[]) {
-			const driver = typeof item === "function" ? item(initContext) : item;
+			const driver = typeof item === "function" ? item() : item;
 
-			if (!driver || typeof driver !== "object" || !("name" in driver)) {
+			if (!driver || typeof driver !== "object" || !("name" in driver) || !("baseUrls" in driver)) {
 				throw new RawaPayError({
 					code: "INVALID_REQUEST",
-					message: "Invalid payment provider supplied. Each provider must implement the PaymentDriver interface.",
+					message: "Invalid payment provider supplied. Each provider must extend BasePaymentDriver or implement PaymentDriver.",
 				});
 			}
 
-			// Call optional driver lifecycle init hook
-			if (typeof driver.init === "function") {
-				driver.init(initContext);
-			}
+			// Scope an HttpClient with the driver's environment baseUrl and SDK timeout
+			const driverHttpClient = this.httpClient.clone({
+				baseUrl: driver.baseUrls[this.environment] ?? driver.baseUrls.sandbox,
+				timeoutMs: this.timeoutMs,
+			});
+
+			// Inject scoped HTTP client directly into driver
+			driver.http = driverHttpClient;
 
 			this.drivers.set(driver.name, driver);
 		}

@@ -1,30 +1,23 @@
 import { describe, expect, it } from "bun:test";
 
 import { RawaPay, createRawaPay } from "./client";
+import { BasePaymentDriver } from "./driver";
 import { success, type RawaPayError } from "./errors";
-import type {
-	CreatePaymentOptions,
-	GetStatusParams,
-	Payment,
-	PaymentDriver,
-	PaymentProviderFactory,
-	ProviderInitContext,
-	Result,
-} from "./types";
+import type { CreatePaymentOptions, GetStatusParams, Payment, PaymentProviderFactory, Result } from "./types";
 
 // Mock driver for testing pluggable architecture in core without external dependencies
-class MockDriver implements PaymentDriver {
+class MockDriver extends BasePaymentDriver {
 	readonly name: string;
+	readonly baseUrls = {
+		sandbox: "https://sandbox.mock.com",
+		production: "https://api.mock.com",
+	};
 	lastCreatedParams?: unknown;
 	lastStatusParams?: unknown;
-	initContext?: ProviderInitContext;
 
 	constructor(name = "mock") {
+		super();
 		this.name = name;
-	}
-
-	init(context: ProviderInitContext): void {
-		this.initContext = context;
 	}
 
 	async createPayment(params: unknown): Promise<Result<Payment, RawaPayError>> {
@@ -80,13 +73,12 @@ describe("@rawapay/core - Pluggable Provider Architecture", () => {
 		expect(pay.getDriver("easypaisa")).toBe(mock2);
 	});
 
-	it("supports provider factory functions and propagates global options", () => {
-		let factoryCalledWith: ProviderInitContext | undefined;
+	it("supports provider factory functions and registers created driver", () => {
+		let factoryCalled = false;
 
-		const mockFactory: PaymentProviderFactory = (context) => {
-			factoryCalledWith = context;
-			const driver = new MockDriver("custom_wallet");
-			return driver;
+		const mockFactory: PaymentProviderFactory = () => {
+			factoryCalled = true;
+			return new MockDriver("custom_wallet");
 		};
 
 		const pay = createRawaPay({
@@ -95,22 +87,46 @@ describe("@rawapay/core - Pluggable Provider Architecture", () => {
 			providers: [mockFactory],
 		});
 
-		expect(factoryCalledWith?.environment).toBe("production");
-		expect(factoryCalledWith?.timeoutMs).toBe(15000);
+		expect(factoryCalled).toBe(true);
 		expect(pay.hasDriver("custom_wallet")).toBe(true);
+		expect(pay.getDriver<any>("custom_wallet")?.http.baseUrl).toBe("https://api.mock.com");
+		expect(pay.getDriver<any>("custom_wallet")?.http.timeoutMs).toBe(15000);
 	});
 
-	it("calls init lifecycle hook on provider driver instances", () => {
-		const driver = new MockDriver("test_wallet");
+	it("automatically configures driver HttpClient with environment baseUrl and timeoutMs", () => {
+		class UrlMockDriver extends MockDriver {
+			readonly baseUrls = {
+				sandbox: "https://sandbox.bank.com/api",
+				production: "https://payments.bank.com/api",
+			};
+		}
 
+		const driverSandbox = new UrlMockDriver("bank_sandbox");
+		new RawaPay({
+			environment: "sandbox",
+			timeoutMs: 8000,
+			providers: [driverSandbox],
+		});
+		expect(driverSandbox.http.baseUrl).toBe("https://sandbox.bank.com/api");
+		expect(driverSandbox.http.timeoutMs).toBe(8000);
+
+		const driverProd = new UrlMockDriver("bank_prod");
 		new RawaPay({
 			environment: "production",
-			timeoutMs: 45000,
-			providers: [driver],
+			timeoutMs: 4000,
+			providers: [driverProd],
 		});
+		expect(driverProd.http.baseUrl).toBe("https://payments.bank.com/api");
+		expect(driverProd.http.timeoutMs).toBe(4000);
+	});
 
-		expect(driver.initContext?.environment).toBe("production");
-		expect(driver.initContext?.timeoutMs).toBe(45000);
+	it("enforces server environment check in BasePaymentDriver constructor", () => {
+		(globalThis as any).window = {};
+		try {
+			expect(() => new MockDriver()).toThrow(/cannot be initialized in browser/);
+		} finally {
+			delete (globalThis as any).window;
+		}
 	});
 
 	it("initializes successfully with default empty providers when omitted", () => {

@@ -1,4 +1,5 @@
 import type { RawaPayError } from "./errors";
+import type { HttpClient } from "./http";
 
 /**
  * Result pattern types for predictable error handling.
@@ -99,14 +100,6 @@ export interface GetStatusParams {
 export type PaymentEnvironment = "sandbox" | "production";
 
 /**
- * Initialization context provided to drivers by the core client.
- */
-export interface ProviderInitContext {
-	environment: PaymentEnvironment;
-	timeoutMs: number;
-}
-
-/**
  * Supported or custom payment provider identifiers.
  * Autocompletes built-in providers while accepting custom provider names.
  */
@@ -136,11 +129,22 @@ export type ExtractProviderNames<TProviders extends readonly unknown[] | undefin
 		: Provider;
 
 /**
- * Interface that each provider driver must implement.
+ * Gateway base URLs mapped by payment environment.
+ */
+export type DriverBaseUrls = Record<PaymentEnvironment, string>;
+
+/**
+ * Contract that every payment provider driver must implement.
  */
 export interface PaymentDriver<TPaymentParams = unknown, TStatusParams = GetStatusParams, TName extends string = string> {
 	/** Unique identifier for the provider driver (e.g. "jazzcash") */
 	readonly name: TName;
+
+	/** Gateway base URLs for sandbox and production environments */
+	readonly baseUrls: DriverBaseUrls;
+
+	/** HTTP client instance managed and configured by the core client */
+	http: HttpClient;
 
 	/** Direct payment initiation */
 	createPayment(params: TPaymentParams): Promise<Result<Payment, RawaPayError>>;
@@ -150,15 +154,12 @@ export interface PaymentDriver<TPaymentParams = unknown, TStatusParams = GetStat
 
 	/** Verifies the cryptographic signature / integrity of an incoming IPN callback */
 	verifyCallback?(body: Record<string, unknown>): boolean;
-
-	/** Optional lifecycle hook called by RawaPay client upon initialization */
-	init?(context: ProviderInitContext): void;
 }
 
 /**
  * A provider can be an initialized PaymentDriver or a factory function.
  */
-export type PaymentProviderFactory<TDriver extends PaymentDriver = PaymentDriver> = (context: ProviderInitContext) => TDriver;
+export type PaymentProviderFactory<TDriver extends PaymentDriver = PaymentDriver> = () => TDriver;
 
 export type PaymentProvider = PaymentDriver<any, any> | PaymentProviderFactory<any>;
 
@@ -196,4 +197,8 @@ export interface RawaPayOptions<TProviders extends readonly PaymentProvider[] = 
 	timeoutMs?: number;
 	/** Configured payment providers passed as an array */
 	providers?: TProviders;
+	/** Custom fetch implementation for proxies, enterprise mTLS, or test runners */
+	fetch?: typeof fetch;
+	/** Pre-configured HttpClient instance to share across all providers */
+	httpClient?: HttpClient;
 }

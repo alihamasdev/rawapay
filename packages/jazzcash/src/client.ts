@@ -1,9 +1,7 @@
 import {
 	type Payment,
-	type PaymentDriver,
-	type PaymentEnvironment,
-	type ProviderInitContext,
 	type Result,
+	BasePaymentDriver,
 	RawaPayError,
 	failure,
 	success,
@@ -14,9 +12,6 @@ import {
 	phoneSchema,
 	cnicSchema,
 	positiveAmountSchema,
-	assertServerEnv,
-	DEFAULT_PAYMENT_ENVIRONMENT,
-	DEFAULT_TIMEOUT_MS,
 } from "@rawapay/core";
 
 import { calculateSecureHash, verifySecureHash } from "./crypto";
@@ -29,19 +24,16 @@ import type {
 	JazzCashRawResponse,
 } from "./types";
 
-const JAZZCASH_SANDBOX_URL = "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction";
-const JAZZCASH_PRODUCTION_URL = "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction";
-const JAZZCASH_SANDBOX_INQUIRY_URL = "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/PaymentInquiry";
-const JAZZCASH_PRODUCTION_INQUIRY_URL = "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/PaymentInquiry";
-
-export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, JazzCashGetStatusParams, "jazzcash"> {
-	readonly name = "jazzcash" as const;
+export class JazzCashDriver extends BasePaymentDriver<JazzCashMWalletParams, JazzCashGetStatusParams, "jazzcash"> {
+	readonly name = "jazzcash";
+	readonly baseUrls = {
+		sandbox: "https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase",
+		production: "https://payments.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase",
+	};
 	readonly config: JazzCashConfig;
-	environment: PaymentEnvironment = DEFAULT_PAYMENT_ENVIRONMENT;
-	timeoutMs: number = DEFAULT_TIMEOUT_MS;
 
 	constructor(config: JazzCashConfig) {
-		assertServerEnv("JazzCashDriver");
+		super();
 
 		if (!config.merchantId) {
 			throw new RawaPayError({
@@ -66,14 +58,6 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 		}
 
 		this.config = config;
-	}
-
-	/**
-	 * Lifecycle hook called by RawaPay client upon initialization to propagate global settings.
-	 */
-	init(context: ProviderInitContext): void {
-		this.environment = context.environment;
-		this.timeoutMs = context.timeoutMs;
 	}
 
 	/**
@@ -163,36 +147,14 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 			pp_SecureHash,
 		} as JazzCashRawMWalletRequest;
 
-		// 4. Select Gateway Endpoint
-		const endpoint = this.environment === "production" ? JAZZCASH_PRODUCTION_URL : JAZZCASH_SANDBOX_URL;
-		const timeoutMs = this.timeoutMs;
-
-		// 5. Execute HTTP Request
+		// 4. Execute HTTP Request
 		try {
-			const res = await fetch(endpoint, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "application/json",
-				},
-				body: JSON.stringify(fullPayload),
-				signal: AbortSignal.timeout(timeoutMs),
+			const res = await this.http.post<JazzCashRawResponse>("/DoMWalletTransaction", fullPayload, {
+				retries: 0,
+				context: { provider: "jazzcash", action: "createPayment" },
 			});
 
-			if (!res.ok) {
-				const errorText = await res.text().catch(() => "");
-				return failure(
-					new RawaPayError({
-						code: "GATEWAY_ERROR",
-						message: `JazzCash server returned HTTP ${res.status}: ${errorText || res.statusText}`,
-						provider: "jazzcash",
-						statusCode: res.status,
-						isRetryable: res.status >= 500,
-					}),
-				);
-			}
-
-			const rawJson = (await res.json()) as JazzCashRawResponse;
+			const rawJson = res.data;
 
 			// Verify response hash if present
 			if (rawJson.pp_SecureHash && !verifySecureHash(rawJson as Record<string, unknown>, this.config.integritySalt!)) {
@@ -238,14 +200,15 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 			// Map failure response code
 			return failure(mapJazzCashError(rawJson));
 		} catch (err: unknown) {
-			if (err instanceof Error && err.name === "TimeoutError") {
+			if (err instanceof RawaPayError) {
 				return failure(
 					new RawaPayError({
-						code: "GATEWAY_ERROR",
-						message: `JazzCash request timed out after ${timeoutMs}ms`,
+						code: err.code,
+						message: err.message,
 						provider: "jazzcash",
-						statusCode: 408,
-						isRetryable: true,
+						statusCode: err.statusCode,
+						rawResponse: err.rawResponse,
+						isRetryable: err.isRetryable,
 					}),
 				);
 			}
@@ -290,34 +253,13 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 			pp_SecureHash,
 		};
 
-		const endpoint = this.environment === "production" ? JAZZCASH_PRODUCTION_INQUIRY_URL : JAZZCASH_SANDBOX_INQUIRY_URL;
-		const timeoutMs = this.timeoutMs;
-
 		try {
-			const res = await fetch(endpoint, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "application/json",
-				},
-				body: JSON.stringify(fullPayload),
-				signal: AbortSignal.timeout(timeoutMs),
+			const res = await this.http.post<JazzCashRawResponse>("/PaymentInquiry", fullPayload, {
+				retries: 2,
+				context: { provider: "jazzcash", action: "getStatus" },
 			});
 
-			if (!res.ok) {
-				const errorText = await res.text().catch(() => "");
-				return failure(
-					new RawaPayError({
-						code: "GATEWAY_ERROR",
-						message: `JazzCash inquiry server returned HTTP ${res.status}: ${errorText || res.statusText}`,
-						provider: "jazzcash",
-						statusCode: res.status,
-						isRetryable: res.status >= 500,
-					}),
-				);
-			}
-
-			const rawJson = (await res.json()) as JazzCashRawResponse;
+			const rawJson = res.data;
 
 			if (rawJson.pp_SecureHash && !verifySecureHash(rawJson as Record<string, unknown>, this.config.integritySalt!)) {
 				return failure(
@@ -371,14 +313,15 @@ export class JazzCashDriver implements PaymentDriver<JazzCashMWalletParams, Jazz
 
 			return failure(mapJazzCashError(rawJson));
 		} catch (err: unknown) {
-			if (err instanceof Error && err.name === "TimeoutError") {
+			if (err instanceof RawaPayError) {
 				return failure(
 					new RawaPayError({
-						code: "GATEWAY_ERROR",
-						message: `JazzCash inquiry timed out after ${timeoutMs}ms`,
+						code: err.code,
+						message: err.message,
 						provider: "jazzcash",
-						statusCode: 408,
-						isRetryable: true,
+						statusCode: err.statusCode,
+						rawResponse: err.rawResponse,
+						isRetryable: err.isRetryable,
 					}),
 				);
 			}
