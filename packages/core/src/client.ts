@@ -1,6 +1,6 @@
 import { assertServerEnv } from "./assert-server";
 import { DEFAULT_PAYMENT_ENVIRONMENT, DEFAULT_TIMEOUT_MS } from "./constants";
-import { RawaPayError, failure } from "./errors";
+import { RawaPayError, RawaPayValidationError, failure } from "./errors";
 import { HttpClient } from "./http";
 import type {
 	CreatePaymentOptions,
@@ -109,7 +109,7 @@ export class RawaPay<
 			if (!driver) {
 				const available = this.listDrivers().join(", ") || "none";
 				return failure(
-					new RawaPayError({
+					new RawaPayValidationError({
 						code: "INVALID_REQUEST",
 						message: `Provider '${providerName}' is not configured in RawaPay. Configured providers: [${available}].`,
 						provider: providerName,
@@ -129,6 +129,7 @@ export class RawaPay<
 						provider: providerName,
 						statusCode: 500,
 						isRetryable: true,
+						cause: err,
 					}),
 				);
 			}
@@ -146,7 +147,7 @@ export class RawaPay<
 			if (!driver) {
 				const available = this.listDrivers().join(", ") || "none";
 				return failure(
-					new RawaPayError({
+					new RawaPayValidationError({
 						code: "INVALID_REQUEST",
 						message: `Provider '${providerName}' is not configured in RawaPay. Configured providers: [${available}].`,
 						provider: providerName,
@@ -166,6 +167,7 @@ export class RawaPay<
 						provider: providerName,
 						statusCode: 500,
 						isRetryable: true,
+						cause: err,
 					}),
 				);
 			}

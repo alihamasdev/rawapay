@@ -3,6 +3,8 @@ import {
 	type Result,
 	BasePaymentDriver,
 	RawaPayError,
+	RawaPayValidationError,
+	RawaPayAuthenticationError,
 	failure,
 	success,
 	formatToPaisa,
@@ -36,21 +38,21 @@ export class JazzCashDriver extends BasePaymentDriver<JazzCashMWalletParams, Jaz
 		super();
 
 		if (!config.merchantId) {
-			throw new RawaPayError({
+			throw new RawaPayAuthenticationError({
 				code: "INVALID_CREDENTIALS",
 				message: "JazzCash merchantId (pp_MerchantID) is required.",
 				provider: "jazzcash",
 			});
 		}
 		if (!config.password) {
-			throw new RawaPayError({
+			throw new RawaPayAuthenticationError({
 				code: "INVALID_CREDENTIALS",
 				message: "JazzCash password (pp_Password) is required.",
 				provider: "jazzcash",
 			});
 		}
 		if (!config.integritySalt) {
-			throw new RawaPayError({
+			throw new RawaPayAuthenticationError({
 				code: "INVALID_CREDENTIALS",
 				message: "JazzCash integritySalt (Hash Key) is required.",
 				provider: "jazzcash",
@@ -69,11 +71,12 @@ export class JazzCashDriver extends BasePaymentDriver<JazzCashMWalletParams, Jaz
 		const amountResult = positiveAmountSchema.safeParse(params.amount);
 		if (!amountResult.success) {
 			return failure(
-				new RawaPayError({
+				new RawaPayValidationError({
 					code: "INVALID_PARAMETER",
 					message: amountResult.error.issues[0]?.message ?? "Invalid amount",
 					provider: "jazzcash",
 					statusCode: 400,
+					cause: amountResult.error,
 				}),
 			);
 		}
@@ -81,18 +84,19 @@ export class JazzCashDriver extends BasePaymentDriver<JazzCashMWalletParams, Jaz
 		const phoneResult = phoneSchema.safeParse(params.phone);
 		if (!phoneResult.success) {
 			return failure(
-				new RawaPayError({
+				new RawaPayValidationError({
 					code: "INVALID_PARAMETER",
 					message: phoneResult.error.issues[0]?.message ?? "Invalid phone number",
 					provider: "jazzcash",
 					statusCode: 400,
+					cause: phoneResult.error,
 				}),
 			);
 		}
 
 		if (!params.cnic) {
 			return failure(
-				new RawaPayError({
+				new RawaPayValidationError({
 					code: "INVALID_PARAMETER",
 					message: "JazzCash mobile wallet payment requires customer CNIC (last 6 digits or full 13-digit CNIC).",
 					provider: "jazzcash",
@@ -104,11 +108,12 @@ export class JazzCashDriver extends BasePaymentDriver<JazzCashMWalletParams, Jaz
 		const cnicResult = cnicSchema.safeParse(params.cnic);
 		if (!cnicResult.success) {
 			return failure(
-				new RawaPayError({
+				new RawaPayValidationError({
 					code: "INVALID_PARAMETER",
 					message: cnicResult.error.issues[0]?.message ?? "Invalid CNIC",
 					provider: "jazzcash",
 					statusCode: 400,
+					cause: cnicResult.error,
 				}),
 			);
 		}

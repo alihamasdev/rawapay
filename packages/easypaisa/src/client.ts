@@ -3,6 +3,8 @@ import {
 	type Result,
 	BasePaymentDriver,
 	RawaPayError,
+	RawaPayAuthenticationError,
+	RawaPayValidationError,
 	failure,
 	phoneSchema,
 	positiveAmountSchema,
@@ -25,7 +27,7 @@ export class EasyPaisaDriver extends BasePaymentDriver<EasyPaisaMAParams, EasyPa
 		super();
 
 		if (!config.storeId) {
-			throw new RawaPayError({
+			throw new RawaPayAuthenticationError({
 				code: "INVALID_CREDENTIALS",
 				message: "EasyPaisa storeId is required.",
 				provider: "easypaisa",
@@ -43,11 +45,12 @@ export class EasyPaisaDriver extends BasePaymentDriver<EasyPaisaMAParams, EasyPa
 		const amountResult = positiveAmountSchema.safeParse(params.amount);
 		if (!amountResult.success) {
 			return failure(
-				new RawaPayError({
+				new RawaPayValidationError({
 					code: "INVALID_PARAMETER",
 					message: amountResult.error.issues[0]?.message ?? "Invalid amount",
 					provider: "easypaisa",
 					statusCode: 400,
+					cause: amountResult.error,
 				}),
 			);
 		}
@@ -55,11 +58,12 @@ export class EasyPaisaDriver extends BasePaymentDriver<EasyPaisaMAParams, EasyPa
 		const phoneResult = phoneSchema.safeParse(params.phone);
 		if (!phoneResult.success) {
 			return failure(
-				new RawaPayError({
+				new RawaPayValidationError({
 					code: "INVALID_PARAMETER",
 					message: phoneResult.error.issues[0]?.message ?? "Invalid phone number",
 					provider: "easypaisa",
 					statusCode: 400,
+					cause: phoneResult.error,
 				}),
 			);
 		}

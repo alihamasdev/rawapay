@@ -1,4 +1,11 @@
-import { RawaPayError, type RawaPayErrorCode } from "@rawapay/core";
+import {
+	type RawaPayError,
+	RawaPayAuthenticationError,
+	RawaPayNetworkError,
+	RawaPayTransactionError,
+	RawaPayValidationError,
+	type RawaPayErrorCode,
+} from "@rawapay/core";
 
 import type { EasyPaisaRawResponse } from "./types";
 
@@ -83,7 +90,7 @@ export function mapEasyPaisaError(response: EasyPaisaRawResponse): RawaPayError 
 	if (mapping) {
 		const message = rawMessage && rawMessage !== "FAILED" ? `${mapping.message} (${rawMessage})` : mapping.message;
 
-		return new RawaPayError({
+		const options = {
 			code: mapping.code,
 			message,
 			provider: "easypaisa",
@@ -91,10 +98,21 @@ export function mapEasyPaisaError(response: EasyPaisaRawResponse): RawaPayError 
 			rawCode,
 			rawResponse: response,
 			isRetryable: mapping.isRetryable,
-		});
+		};
+
+		if (mapping.code === "INVALID_CREDENTIALS") {
+			return new RawaPayAuthenticationError(options);
+		}
+		if (mapping.code === "INVALID_PARAMETER") {
+			return new RawaPayValidationError(options);
+		}
+		if (mapping.code === "GATEWAY_ERROR") {
+			return new RawaPayNetworkError(options);
+		}
+		return new RawaPayTransactionError(options);
 	}
 
-	return new RawaPayError({
+	return new RawaPayTransactionError({
 		code: "PAYMENT_FAILED",
 		message: rawMessage || "EasyPaisa transaction failed.",
 		provider: "easypaisa",

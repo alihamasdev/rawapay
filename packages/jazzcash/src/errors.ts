@@ -1,4 +1,10 @@
-import { RawaPayError, type RawaPayErrorCode } from "@rawapay/core";
+import {
+	type RawaPayError,
+	RawaPayAuthenticationError,
+	RawaPayNetworkError,
+	RawaPayTransactionError,
+	type RawaPayErrorCode,
+} from "@rawapay/core";
 
 import type { JazzCashRawResponse } from "./types";
 
@@ -125,7 +131,7 @@ export function mapJazzCashError(response: JazzCashRawResponse): RawaPayError {
 	if (mapping) {
 		const message = rawMessage && rawMessage !== "Unknown gateway error" ? `${mapping.message} (${rawMessage})` : mapping.message;
 
-		return new RawaPayError({
+		const options = {
 			code: mapping.code,
 			message,
 			provider: "jazzcash",
@@ -133,10 +139,18 @@ export function mapJazzCashError(response: JazzCashRawResponse): RawaPayError {
 			rawCode,
 			rawResponse: response,
 			isRetryable: mapping.isRetryable,
-		});
+		};
+
+		if (mapping.code === "INVALID_CREDENTIALS" || mapping.code === "INVALID_SIGNATURE") {
+			return new RawaPayAuthenticationError(options);
+		}
+		if (mapping.code === "GATEWAY_ERROR") {
+			return new RawaPayNetworkError(options);
+		}
+		return new RawaPayTransactionError(options);
 	}
 
-	return new RawaPayError({
+	return new RawaPayTransactionError({
 		code: "PAYMENT_FAILED",
 		message: rawMessage,
 		provider: "jazzcash",

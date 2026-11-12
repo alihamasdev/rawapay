@@ -1,5 +1,5 @@
 import { DEFAULT_TIMEOUT_MS } from "./constants";
-import { RawaPayError } from "./errors";
+import { RawaPayError, RawaPayNetworkError } from "./errors";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS";
 
@@ -414,20 +414,22 @@ export class HttpClient {
 				(networkErr instanceof Error && (networkErr.name === "AbortError" || networkErr.name === "TimeoutError"));
 
 			if (isAbort) {
-				throw new RawaPayError({
+				throw new RawaPayNetworkError({
 					code: "GATEWAY_ERROR",
 					message: `HTTP request timed out after ${timeoutMs}ms.`,
 					statusCode: 408,
 					isRetryable: true,
+					cause: networkErr,
 				});
 			}
 
 			const message = networkErr instanceof Error ? networkErr.message : String(networkErr);
-			throw new RawaPayError({
+			throw new RawaPayNetworkError({
 				code: "GATEWAY_ERROR",
 				message: `Network communication failure: ${message}`,
 				statusCode: 502,
 				isRetryable: true,
+				cause: networkErr,
 			});
 		} finally {
 			if (timeoutId) {
@@ -463,7 +465,7 @@ export class HttpClient {
 				rawResponse.statusText ||
 				`Request failed with status ${rawResponse.status}`;
 
-			throw new RawaPayError({
+			throw new RawaPayNetworkError({
 				code: "GATEWAY_ERROR",
 				message: `Gateway returned HTTP ${rawResponse.status}: ${errorMsg}`,
 				statusCode: rawResponse.status,
@@ -486,7 +488,7 @@ export class HttpClient {
 	 * Helper to determine if an error or status code is transient and safe to retry.
 	 */
 	private isTransientError(err: unknown): boolean {
-		if (err instanceof RawaPayError) {
+		if (RawaPayError.is(err)) {
 			return err.isRetryable || this.isTransientStatus(err.statusCode);
 		}
 		if (err instanceof Error) {
