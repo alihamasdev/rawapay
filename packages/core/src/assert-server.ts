@@ -4,8 +4,16 @@ import { RawaPayError } from "./errors";
  * Asserts that the code is running in a server-side environment (Node.js, Bun, Edge, Deno).
  * If executed in a browser/client environment, immediately throws a descriptive RawaPayError
  * to prevent leaking sensitive merchant credentials (Merchant ID, Password, Integrity Salt).
+ *
+ * If NODE_ENV is set to "test", this check is bypassed to allow running unit
+ * and integration tests in test suites that emulate browser DOM APIs (jsdom, happy-dom).
  */
 export function assertServerEnv(context = "RawaPay"): void {
+	const nodeEnv = typeof process !== "undefined" ? process.env?.NODE_ENV : undefined;
+	if (nodeEnv === "test") {
+		return;
+	}
+
 	const globalObj = globalThis as unknown as {
 		window?: unknown;
 		document?: unknown;

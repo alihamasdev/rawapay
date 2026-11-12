@@ -3,7 +3,9 @@ import { describe, expect, it } from "bun:test";
 import {
 	cnicSchema,
 	formatDateTime,
+	formatFromPaisa,
 	formatToPaisa,
+	generateTxnRefNo,
 	isValidCnic,
 	isValidPakistaniPhone,
 	normalizePakistaniPhone,
@@ -53,6 +55,38 @@ describe("Core Validation & Formatting", () => {
 		expect(formatToPaisa(0.25)).toBe("25");
 	});
 
+	it("converts integer paisas back to PKR rupee decimals (formatFromPaisa)", () => {
+		expect(formatFromPaisa("10000")).toBe(100);
+		expect(formatFromPaisa(10000)).toBe(100);
+		expect(formatFromPaisa("150050")).toBe(1500.5);
+		expect(formatFromPaisa(150050)).toBe(1500.5);
+		expect(formatFromPaisa("25")).toBe(0.25);
+		expect(formatFromPaisa(25)).toBe(0.25);
+		expect(formatFromPaisa(0)).toBe(0);
+		expect(formatFromPaisa("0")).toBe(0);
+		expect(formatFromPaisa("  10000  ")).toBe(100);
+	});
+
+	it("maintains mathematical symmetry between formatToPaisa and formatFromPaisa", () => {
+		const amounts = [1, 100, 1500.5, 0.25, 9999.99, 50000];
+		for (const amt of amounts) {
+			const paisa = formatToPaisa(amt);
+			const rupee = formatFromPaisa(paisa);
+			expect(rupee).toBe(amt);
+		}
+	});
+
+	it("strictly validates inputs in formatFromPaisa", () => {
+		expect(() => formatFromPaisa("")).toThrow(/string cannot be empty/);
+		expect(() => formatFromPaisa("   ")).toThrow(/string cannot be empty/);
+		expect(() => formatFromPaisa("invalid")).toThrow(/Invalid paisa value/);
+		expect(() => formatFromPaisa(-100)).toThrow(/Invalid paisa value/);
+		expect(() => formatFromPaisa("-50")).toThrow(/Invalid paisa value/);
+		expect(() => formatFromPaisa(null as any)).toThrow(/Expected a string or number/);
+		expect(() => formatFromPaisa(undefined as any)).toThrow(/Expected a string or number/);
+		expect(() => formatFromPaisa(Number.NaN)).toThrow(/Invalid paisa value/);
+	});
+
 	it("validates positive amounts", () => {
 		expect(positiveAmountSchema.parse(500)).toBe(500);
 		expect(() => positiveAmountSchema.parse(0)).toThrow();
@@ -63,5 +97,21 @@ describe("Core Validation & Formatting", () => {
 		// 2026-09-26T09:30:45Z in UTC is 2026-09-26T14:30:45 in Asia/Karachi (UTC+5)
 		const utcDate = new Date("2026-09-26T09:30:45Z");
 		expect(formatDateTime(utcDate)).toBe("20260926143045");
+	});
+
+	it("generates cryptographically secure transaction reference numbers (generateTxnRefNo)", () => {
+		const ref = generateTxnRefNo();
+		// Prefix "T" + 14-digit PKT timestamp (YYYYMMDDHHMMSS) + 6-digit random number = 21 chars
+		expect(ref).toMatch(/^T\d{14}\d{6}$/);
+
+		const customRef = generateTxnRefNo("INV-");
+		expect(customRef).toMatch(/^INV-\d{14}\d{6}$/);
+
+		// Concurrency uniqueness: 100 generated refs must be distinct
+		const generated = new Set<string>();
+		for (let i = 0; i < 100; i++) {
+			generated.add(generateTxnRefNo());
+		}
+		expect(generated.size).toBe(100);
 	});
 });

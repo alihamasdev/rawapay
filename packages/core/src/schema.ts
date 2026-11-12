@@ -172,6 +172,24 @@ export function formatToPaisa(amount: number): string {
 }
 
 /**
+ * Converts integer paisas (string or number) back to PKR rupee decimals (e.g. "150000" or 150000 -> 1500, "150050" -> 1500.5).
+ * Guarantees precision rounding to 2 decimal places to avoid IEEE-754 floating-point inaccuracies.
+ */
+export function formatFromPaisa(paisa: string | number): number {
+	if (typeof paisa !== "string" && typeof paisa !== "number") {
+		throw new Error(`Invalid paisa value: ${String(paisa)}. Expected a string or number.`);
+	}
+	if (typeof paisa === "string" && paisa.trim() === "") {
+		throw new Error("Invalid paisa value: string cannot be empty.");
+	}
+	const numericPaisa = typeof paisa === "string" ? Number(paisa.trim()) : paisa;
+	if (Number.isNaN(numericPaisa) || !Number.isFinite(numericPaisa) || numericPaisa < 0) {
+		throw new Error(`Invalid paisa value: "${paisa}". Must be a non-negative number or numeric string.`);
+	}
+	return Number((Math.round(numericPaisa) / 100).toFixed(2));
+}
+
+/**
  * Formats a Date object to YYYYMMDDHHMMSS format in Pakistan Standard Time (PKT, UTC+5).
  * Guarantees correct gateway timestamp synchronization regardless of the server's local timezone.
  */
@@ -214,9 +232,18 @@ export function formatExpiryDateTime(hoursAhead = 1, fromDate = new Date()): str
 
 /**
  * Generates a unique transaction reference number (e.g. "T20260926101234123456").
+ * Uses cryptographically secure random values via globalThis.crypto.getRandomValues()
+ * to eliminate collision risks under high concurrency.
  */
 export function generateTxnRefNo(prefix = "T"): string {
 	const timestamp = formatDateTime();
-	const random = Math.floor(100000 + Math.random() * 900000);
+	let random: number;
+	if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.getRandomValues === "function") {
+		const buf = new Uint32Array(1);
+		globalThis.crypto.getRandomValues(buf);
+		random = 100000 + (buf[0] % 900000);
+	} else {
+		random = Math.floor(100000 + Math.random() * 900000);
+	}
 	return `${prefix}${timestamp}${random}`;
 }

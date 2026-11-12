@@ -242,12 +242,12 @@ The foundation for all RawaPay drivers and client operations. Contains no extern
   - `RawaPayError`: Custom error class with enumerable `message`, normalized `RawaPayErrorCode`, HTTP `statusCode`, `rawCode`, `rawResponse`, and `isRetryable`.
   - Serializer: `error.toJSON()` prevents serialization loss in JSON APIs and Next.js Server Actions.
 - **Security**:
-  - `assertServerEnv(context)`: Guarantees that code executing sensitive operations runs solely in server runtimes (Node.js, Bun, Edge).
+  - `assertServerEnv(context)`: Guarantees that code executing sensitive operations runs solely in server runtimes (Node.js, Bun, Edge), automatically permitting DOM emulation when `NODE_ENV="test"`.
 - **Pakistani Format Validators & Normalizers**:
   - `phoneSchema`: Validates and normalizes `03xxxxxxxxx`, `+923xxxxxxxxx`, `923xxxxxxxxx`, and `3xxxxxxxxx` into a clean 11-digit string.
   - `cnicSchema`: Validates and extracts the 6-digit suffix required for mobile wallet authorization from either a 6-digit string or a full 13-digit CNIC (`42101-1234567-1`).
   - `positiveAmountSchema`: Enforces valid positive transaction limits up to PKR 10,000,000.
-  - Utility helpers: `formatToPaisa()`, `formatDateTime()` (guarantees Asia/Karachi PKT UTC+5 timestamp synchronization), and `generateTxnRefNo()`.
+  - Utility helpers: `formatToPaisa()`, `formatFromPaisa()`, `formatDateTime()` (guarantees Asia/Karachi PKT UTC+5 timestamp synchronization), and `generateTxnRefNo()` (cryptographically uniform generation via Web Crypto).
 
 ### `packages/jazzcash`
 

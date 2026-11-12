@@ -121,11 +121,14 @@ describe("@rawapay/core - Pluggable Provider Architecture", () => {
 	});
 
 	it("enforces server environment check in BasePaymentDriver constructor", () => {
+		const originalEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
 		(globalThis as any).window = {};
 		try {
 			expect(() => new MockDriver()).toThrow(/cannot be initialized in browser/);
 		} finally {
 			delete (globalThis as any).window;
+			process.env.NODE_ENV = originalEnv;
 		}
 	});
 
